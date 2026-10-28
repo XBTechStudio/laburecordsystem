@@ -4,7 +4,7 @@ import { RangeBar } from "@/components/range";
 import { TrendChart } from "@/components/trend-chart";
 import { Card, Delta, Info, PageHeader, TableWrap } from "@/components/ui";
 import { can, requirePage } from "@/lib/auth";
-import { addDays, allDaysOf, dateOnly, daysBetween, dayStart, parseRange, previousRange, todayStr } from "@/lib/dates";
+import { addDays, allDaysOf, daysBetween, dayStart, parseRange, previousRange, todayStr } from "@/lib/dates";
 import { prisma } from "@/lib/db";
 import { count, money0, n, pct } from "@/lib/format";
 import { getT } from "@/lib/i18n-server";
@@ -40,14 +40,16 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const chartRange = daysBetween(range.from, range.to) < 6 ? { from: addDays(range.to, -13), to: range.to } : range;
   const last7 = { from: addDays(today, -6), to: today };
 
-  const [rows, prevRows, chartRows, players, recentRows, flows7, notes7, promos, promoList, churnTop, lastTxn, unpaid] = await Promise.all([
+  const seeBalances = can(user, "reconcile");
+  const [rows, prevRows, chartRows, players, lastChecks, busyAccounts, promos, promoList, churnTop, lastTxn, unpaid] = await Promise.all([
     dailyRows(ids, range).then((r) => converted(r, scope.rate)),
     dailyRows(ids, prev).then((r) => converted(r, scope.rate)),
     chartRange === range ? Promise.resolve(null) : dailyRows(ids, chartRange).then((r) => converted(r, scope.rate)),
     playerCounts(ids, range, "all"),
-    dailyRows(ids, last7),
-    ids.length ? prisma.channelFlow.findMany({ where: { brandId: { in: ids }, date: { gte: dateOnly(last7.from), lte: dateOnly(last7.to) } }, select: { brandId: true, date: true } }) : Promise.resolve([]),
-    ids.length ? prisma.reconNote.findMany({ where: { brandId: { in: ids }, resolved: true, date: { gte: dateOnly(last7.from) } } }) : Promise.resolve([]),
+    seeBalances ? prisma.balanceCheck.findMany({ where: { channel: { active: true } }, orderBy: { at: "desc" }, distinct: ["channelId"], include: { channel: true } }) : Promise.resolve([]),
+    seeBalances
+      ? prisma.txn.groupBy({ by: ["channelId"], where: { channelId: { not: null }, txnAt: { gte: dayStart(last7.from) } } })
+      : Promise.resolve([]),
     promoStats(ids, range, settings.promoWindowDays),
     ids.length ? prisma.promotion.findMany({ where: { brandId: { in: ids } }, select: { id: true, name: true, brandId: true } }) : Promise.resolve([]),
     queryPlayers(settings.tierScoring, { brandIds: ids, hasDeposit: true, tierRank: 0, contacted: false, idleBefore: since(settings.churnDays[0] ?? 7), limit: 0, offset: 0 }),
@@ -71,33 +73,29 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
   // ---- things the system noticed ----
   const alerts: Alert[] = [];
-  const stmt = new Set(flows7.map((f) => `${f.brandId}|${f.date.toISOString().slice(0, 10)}`));
-  const checked = new Set(notes7.map((x) => `${x.brandId}|${x.date.toISOString().slice(0, 10)}`));
-  const usesStatements = new Set(flows7.map((f) => f.brandId));
-  let diffDays = 0;
-  let diffAmount = 0;
-  let missing = 0;
-  for (const r of recentRows) {
-    const k = `${r.brandId}|${r.day}`;
-    if (checked.has(k)) continue;
-    if (stmt.has(k)) {
-      const d = Math.abs(r.flowIn - r.deposit) + Math.abs(r.flowOut - r.withdraw);
-      if (d > settings.reconTolerance * 2) {
-        diffDays++;
-        diffAmount += d * scope.rate(r.brandId);
-      }
-    } else if (usesStatements.has(r.brandId) && r.day < today && r.depositCount + r.withdrawCount > 0) missing++;
-  }
-  if (diffDays)
+  // Bank/PG balances: the latest real balance per account, and busy accounts nobody has checked for a day.
+  const off = lastChecks.filter((c) => !c.resolved && Math.abs(n(c.actual) - n(c.expected)) > settings.reconTolerance);
+  if (off.length)
     alerts.push({
       level: "critical",
-      title: t("PG/bank statements don't match the back office"),
-      detail: t("{n} days in the last 7 days, {amount} in total", { n: diffDays, amount: money0(diffAmount, cur) }),
+      title: t("{n} accounts don't match the real balance", { n: off.length }),
+      detail: off
+        .slice(0, 3)
+        .map((c) => `${c.channel.name} ${n(c.actual) - n(c.expected) > 0 ? "+" : ""}${money0(n(c.actual) - n(c.expected), c.channel.currency)}`)
+        .join(" · "),
       href: "/reconcile",
       action: t("Reconcile"),
     });
-  if (missing)
-    alerts.push({ level: "warning", title: t("Statements missing"), detail: t("{n} days with transactions but no PG/bank statement yet", { n: missing }), href: "/reconcile", action: t("Reconcile") });
+  const checkedRecently = new Set(lastChecks.filter((c) => c.at > since(1)).map((c) => c.channelId));
+  const unchecked = busyAccounts.filter((a) => a.channelId != null && !checkedRecently.has(a.channelId)).length;
+  if (unchecked)
+    alerts.push({
+      level: "warning",
+      title: t("{n} accounts not checked in the last 24 hours", { n: unchecked }),
+      detail: t("Enter their real balance to confirm the money is all there"),
+      href: "/reconcile",
+      action: t("Reconcile"),
+    });
 
   const losers = promoList
     .map((p) => ({ p, j: judge(promos.get(p.id) ?? { claims: 0, claimers: 0, given: 0, dep: 0, depCount: 0, wd: 0, wdCount: 0 }, settings.promoAdjustPercent) }))

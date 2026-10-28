@@ -5,7 +5,7 @@ import type { TxnType } from "@prisma/client";
 import { assertBrand, Denied, guard } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { int, need, run, str, UserError, type Result } from "@/lib/action";
-import { dateOnly, fromLocalInput } from "@/lib/dates";
+import { fromLocalInput } from "@/lib/dates";
 import { prisma } from "@/lib/db";
 import { getT } from "@/lib/i18n-server";
 import { ensurePlayers, refreshPlayerStats } from "@/lib/players";
@@ -22,19 +22,12 @@ export type ImportRow = {
   phone?: string;
   name?: string;
   promo?: string;
-  date?: string;
-  inAmount?: number;
-  inCount?: number;
-  outAmount?: number;
-  outCount?: number;
-  fee?: number;
 };
 
-export type ImportKind = "txn" | "player" | "claim" | "flow";
+export type ImportKind = "txn" | "player" | "claim";
 
-const KIND_LABEL: Record<ImportKind, string> = { txn: "transactions", player: "players", claim: "promotion claims", flow: "PG/bank statements" };
+const KIND_LABEL: Record<ImportKind, string> = { txn: "transactions", player: "players", claim: "promotion claims" };
 const TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
-const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 async function access(brandId: number) {
   const user = await guard("import", 2);
@@ -69,7 +62,7 @@ export async function startImport(brandId: number, kind: ImportKind, filename: s
   return b.id;
 }
 
-type ChunkResult = { inserted: number; skipped: number; created: number; problems: string[] };
+type ChunkResult = { inserted: number; skipped: number; created: number; problems: string[]; newChannels: string[] };
 
 /** Imports one chunk. Rows already in the system (same reference, or same player/type/amount/time) are skipped, so re-importing a file is safe. */
 export async function importChunk(batchId: number, rows: ImportRow[], offset: number): Promise<ChunkResult & { error?: string }> {
@@ -86,6 +79,7 @@ export async function importChunk(batchId: number, rows: ImportRow[], offset: nu
     let inserted = 0;
     let skipped = 0;
     let created = 0;
+    const newChannels: string[] = [];
 
     if (kind === "player") {
       const ok = rows.filter((r, i) => (r.username?.trim() ? true : (bad(i, "no username"), false)));
@@ -97,8 +91,17 @@ export async function importChunk(batchId: number, rows: ImportRow[], offset: nu
     }
 
     if (kind === "txn") {
+      // PG/bank names not seen before become new accounts, so every transaction counts towards a balance.
       const channels = await prisma.payChannel.findMany();
       const chByName = new Map(channels.map((c) => [c.name.toLowerCase(), c.id]));
+      const brand = await prisma.brand.findUniqueOrThrow({ where: { id: brandId } });
+      for (const name of new Set(rows.map((r) => r.channel?.trim()).filter((x): x is string => !!x))) {
+        if (chByName.has(name.toLowerCase())) continue;
+        const type = /pay|pg|gateway|flash|power/i.test(name) && !/bank|posb|dbs|ocbc|uob|maybank|cimb/i.test(name) ? "PG" : "BANK";
+        const c = await prisma.payChannel.upsert({ where: { name: name.slice(0, 80) }, create: { name: name.slice(0, 80), type, currency: brand.currency }, update: {} });
+        chByName.set(name.toLowerCase(), c.id);
+        newChannels.push(c.name);
+      }
       const ok = rows
         .map((r, i) => ({ r, i }))
         .filter(({ r, i }) => {
@@ -179,37 +182,12 @@ export async function importChunk(batchId: number, rows: ImportRow[], offset: nu
       skipped = ok.length - inserted;
     }
 
-    if (kind === "flow") {
-      const channels = await prisma.payChannel.findMany();
-      const chByName = new Map(channels.map((c) => [c.name.toLowerCase(), c]));
-      for (const [i, r] of rows.entries()) {
-        const ch = chByName.get((r.channel ?? "").trim().toLowerCase());
-        if (!ch) {
-          bad(i, "PG/bank “{name}” is not set up in Settings", { name: r.channel ?? "" });
-          continue;
-        }
-        if (!r.date || !DAY.test(r.date)) {
-          bad(i, "date not recognised");
-          continue;
-        }
-        const vals = { inAmount: Number(r.inAmount) || 0, inCount: Math.round(Number(r.inCount) || 0), outAmount: Number(r.outAmount) || 0, outCount: Math.round(Number(r.outCount) || 0) };
-        const fee = r.fee != null && Number.isFinite(Number(r.fee)) ? Number(r.fee) : (vals.inAmount * Number(ch.feePercent)) / 100 + vals.inCount * Number(ch.feeFixed);
-        const where = { brandId_channelId_date: { brandId, channelId: ch.id, date: dateOnly(r.date) } };
-        await prisma.channelFlow.upsert({
-          where,
-          create: { brandId, channelId: ch.id, date: dateOnly(r.date), ...vals, fee, note: r.note?.slice(0, 250) || null, createdById: user.id, importId: batchId },
-          update: { ...vals, fee },
-        });
-        inserted++;
-      }
-    }
-
     await prisma.importBatch.update({ where: { id: batchId }, data: { inserted: { increment: inserted }, skipped: { increment: skipped + problems.length } } });
-    return { inserted, skipped, created, problems };
+    return { inserted, skipped, created, problems, newChannels };
   } catch (e) {
     const msg = e instanceof Denied || e instanceof UserError ? t(e.message) : t("Something went wrong while importing this part of the file.");
     if (!(e instanceof Denied || e instanceof UserError)) console.error(e);
-    return { inserted: 0, skipped: 0, created: 0, problems: [], error: msg };
+    return { inserted: 0, skipped: 0, created: 0, problems: [], newChannels: [], error: msg };
   }
 }
 
@@ -238,8 +216,6 @@ export async function undoImport(_p: Result, fd: FormData) {
       await refreshPlayerStats(affected.map((a) => a.playerId));
     } else if (b.kind === "claim") {
       removed = (await prisma.promoClaim.deleteMany({ where: { importId: id } })).count;
-    } else if (b.kind === "flow") {
-      removed = (await prisma.channelFlow.deleteMany({ where: { importId: id } })).count;
     }
     // Players created by this import go too, unless something else now refers to them.
     const players = await prisma.player.deleteMany({ where: { importId: id, txns: { none: {} }, claims: { none: {} }, contacts: { none: {} } } });

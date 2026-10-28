@@ -49,11 +49,14 @@ async function main() {
   ]);
   const scale = [1, 0.6, 0.12]; // Brand C is in SGD, so smaller numbers
 
+  const openingAt = new Date(new Date(dayStr(DAYS + 1) + "T00:00:00Z").getTime() - OFFSET);
   const channels = await Promise.all([
-    prisma.payChannel.create({ data: { name: "FPay", type: "PG", feePercent: 2, feeFixed: 0 } }),
-    prisma.payChannel.create({ data: { name: "SurePay", type: "PG", feePercent: 1.8, feeFixed: 0.5 } }),
-    prisma.payChannel.create({ data: { name: "Maybank 1234", type: "BANK", feePercent: 0, feeFixed: 0 } }),
+    prisma.payChannel.create({ data: { name: "FPay", type: "PG", currency: "MYR", feePercent: 2, feeFixed: 0, openingAt } }),
+    prisma.payChannel.create({ data: { name: "SurePay", type: "PG", currency: "MYR", feePercent: 1.8, feeFixed: 0.5, openingAt } }),
+    prisma.payChannel.create({ data: { name: "Maybank 1234", type: "BANK", currency: "MYR", openingBalance: 150000, openingAt } }),
+    prisma.payChannel.create({ data: { name: "DBS 7788", type: "BANK", currency: "SGD", openingBalance: 20000, openingAt } }),
   ]);
+  const [fpay, surepay, maybank, dbs] = channels;
 
   // Staff
   const pw = hash(DEMO_PASSWORD);
@@ -97,45 +100,13 @@ async function main() {
       for (let d = start; d >= stopped; d--) {
         if (rnd() > profile.freq) continue;
         const dep = Math.round(between(profile.amt[0], profile.amt[1]) * k);
-        txns.push({ brandId: brand.id, playerId: p.id, type: "DEPOSIT", amount: dep, txnAt: at(d), channelId: pick(channels).id });
-        if (rnd() < 0.42) txns.push({ brandId: brand.id, playerId: p.id, type: "WITHDRAW", amount: Math.round(dep * between(0.6, 2.1)), txnAt: at(d, between(10, 24)), channelId: channels[2].id });
+        const inAcc = bi === 2 ? dbs : pick([fpay, surepay, maybank]);
+        const outAcc = bi === 2 ? dbs : maybank;
+        txns.push({ brandId: brand.id, playerId: p.id, type: "DEPOSIT", amount: dep, txnAt: at(d), channelId: inAcc.id });
+        if (rnd() < 0.42) txns.push({ brandId: brand.id, playerId: p.id, type: "WITHDRAW", amount: Math.round(dep * between(0.6, 2.1)), txnAt: at(d, between(10, 24)), channelId: outAcc.id });
       }
     }
     for (let i = 0; i < txns.length; i += 2000) await prisma.txn.createMany({ data: txns.slice(i, i + 2000) });
-
-    // PG / bank statements: match the back office, with a few days off.
-    const flows = new Map<string, { inA: number; inC: number; outA: number; outC: number }>();
-    for (const t of txns) {
-      const day = new Date(t.txnAt.getTime() + OFFSET).toISOString().slice(0, 10);
-      const key = `${t.channelId}|${day}`;
-      const f = flows.get(key) ?? { inA: 0, inC: 0, outA: 0, outC: 0 };
-      if (t.type === "DEPOSIT") {
-        f.inA += t.amount;
-        f.inC++;
-      } else {
-        f.outA += t.amount;
-        f.outC++;
-      }
-      flows.set(key, f);
-    }
-    const flowRows = [...flows.entries()]
-      .filter(([key]) => key.split("|")[1] < today) // today's statement isn't in yet
-      .map(([key, f]) => {
-        const [ch, day] = key.split("|");
-        const c = channels.find((x) => x.id === Number(ch))!;
-        const off = rnd() < 0.04 ? Math.round(between(80, 900) * k) : 0;
-        return {
-          brandId: brand.id,
-          channelId: c.id,
-          date: new Date(day + "T00:00:00Z"),
-          inAmount: f.inA - off,
-          inCount: f.inC - (off ? 1 : 0),
-          outAmount: f.outA,
-          outCount: f.outC,
-          fee: Math.round(((f.inA - off) * Number(c.feePercent)) / 100 + f.inC * Number(c.feeFixed)),
-        };
-      });
-    await prisma.channelFlow.createMany({ data: flowRows });
 
     // Promotions and claims, and the deposits that followed.
     const promos = await Promise.all(promoNames.map((name) => prisma.promotion.create({ data: { brandId: brand.id, name } })));
@@ -199,7 +170,7 @@ async function main() {
     if (rnd() < 0.35) {
       const back = new Date(when.getTime() + between(1, 5) * 86400_000);
       if (back < new Date())
-        await prisma.txn.create({ data: { brandId: p.brandId, playerId: p.id, type: "DEPOSIT", amount: Math.round(between(100, 600)), txnAt: back, channelId: channels[0].id } });
+        await prisma.txn.create({ data: { brandId: p.brandId, playerId: p.id, type: "DEPOSIT", amount: Math.round(between(100, 600)), txnAt: back, channelId: fpay.id } });
     }
   }
   await prisma.$executeRawUnsafe(`
@@ -208,6 +179,46 @@ async function main() {
              MAX(CASE WHEN type = 'DEPOSIT' THEN txnAt END) AS ld
       FROM \`Txn\` GROUP BY playerId) s ON s.playerId = p.id
     SET p.depositTotal = s.dt, p.depositCount = s.dc, p.lastDepositAt = s.ld`);
+
+  // PGs settle the previous day's takings (after fees) to the bank every morning; the owner takes money out on the 1st.
+  const pgDays = await prisma.$queryRawUnsafe<{ id: number; d: string; net: unknown }[]>(`
+    SELECT c.id, DATE_FORMAT(DATE_ADD(t.txnAt, INTERVAL 8 HOUR), '%Y-%m-%d') AS d, SUM(t.amount - (t.amount * c.feePercent / 100 + c.feeFixed)) AS net
+    FROM \`Txn\` t JOIN \`PayChannel\` c ON c.id = t.channelId
+    WHERE c.type = 'PG' AND t.type = 'DEPOSIT' GROUP BY c.id, d`);
+  const moves: { channelId: number; kind: "TRANSFER_IN" | "TRANSFER_OUT" | "CASHOUT"; amount: number; at: Date; transferRef?: string; note: string; userName: string }[] = [];
+  for (const r of pgDays) {
+    const next = new Date(new Date(r.d + "T00:00:00Z").getTime() - OFFSET + 34 * 3600_000); // 10:00 the next day
+    if (next > new Date()) continue;
+    const net = Math.round(Number(r.net) * 100) / 100;
+    const ref = `settle-${r.id}-${r.d}`;
+    const name = r.id === fpay.id ? "FPay" : "SurePay";
+    moves.push({ channelId: r.id, kind: "TRANSFER_OUT", amount: -net, at: next, transferRef: ref, note: `${name} settlement ${r.d}`, userName: "Aina" });
+    moves.push({ channelId: maybank.id, kind: "TRANSFER_IN", amount: net, at: next, transferRef: ref, note: `${name} settlement ${r.d}`, userName: "Aina" });
+  }
+  for (let d = DAYS; d >= 0; d--)
+    if (dayStr(d).endsWith("-01")) moves.push({ channelId: maybank.id, kind: "CASHOUT", amount: -80000, at: at(d, 15), note: "Owner withdrawal", userName: "Aina" });
+  await prisma.channelMove.createMany({ data: moves });
+
+  // Today's balance checks: most match, Maybank is short by 850, FPay was last checked two days ago, DBS never.
+  const expected = async (channelId: number, when: Date) => {
+    const [r] = await prisma.$queryRawUnsafe<{ bal: unknown }[]>(`
+      SELECT c.openingBalance
+        + COALESCE((SELECT SUM(CASE WHEN t.type = 'DEPOSIT' THEN t.amount - (t.amount * c.feePercent / 100 + c.feeFixed) ELSE -t.amount END)
+                    FROM \`Txn\` t WHERE t.channelId = c.id AND t.txnAt >= c.openingAt AND t.txnAt <= ?), 0)
+        + COALESCE((SELECT SUM(m.amount) FROM \`ChannelMove\` m WHERE m.channelId = c.id AND m.at >= c.openingAt AND m.at <= ?), 0) AS bal
+      FROM \`PayChannel\` c WHERE c.id = ?`, when, when, channelId);
+    return Math.round(Number(r.bal) * 100) / 100;
+  };
+  const nowish = new Date(Date.now() - 2 * 3600_000);
+  const twoDaysAgo = new Date(Date.now() - 50 * 3600_000);
+  for (const [acc, when, short] of [
+    [surepay, nowish, 0],
+    [maybank, nowish, 850],
+    [fpay, twoDaysAgo, 0],
+  ] as const) {
+    const exp = await expected(acc.id, when);
+    await prisma.balanceCheck.create({ data: { channelId: acc.id, at: when, expected: exp, actual: exp - short, userName: "Aina", resolved: short === 0 } });
+  }
 
   // Shareholders and their shares.
   const [chen, lim, wong] = await Promise.all(["Mr. Chen", "Mr. Lim", "Mr. Wong"].map((name) => prisma.shareholder.create({ data: { name } })));
@@ -224,9 +235,9 @@ async function main() {
     ],
   });
 
-  const counts = await Promise.all([prisma.player.count(), prisma.txn.count(), prisma.channelFlow.count(), prisma.promoClaim.count(), prisma.contactLog.count()]);
+  const counts = await Promise.all([prisma.player.count(), prisma.txn.count(), prisma.channelMove.count(), prisma.promoClaim.count(), prisma.contactLog.count()]);
   if (!process.env.DEMO_PASSWORD) console.log(`Demo staff password: ${DEMO_PASSWORD}`);
-  console.log(`Demo data loaded: ${counts[0]} players, ${counts[1]} transactions, ${counts[2]} statement rows, ${counts[3]} claims, ${counts[4]} CS contacts.`);
+  console.log(`Demo data loaded: ${counts[0]} players, ${counts[1]} transactions, ${counts[2]} account movements, ${counts[3]} claims, ${counts[4]} CS contacts.`);
 }
 
 main()

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useT } from "@/components/i18n";
 import { tk } from "@/lib/i18n";
@@ -21,6 +22,8 @@ type Mapping = {
   firstWord?: boolean;
   /** The file's times are UTC; add 8 hours to get Malaysia/Singapore time. */
   utc?: boolean;
+  /** Column to use when the mapped one is empty, e.g. PG/bank: "Bank", else "Method". */
+  fallback?: Partial<Record<keyof ImportRow, string>>;
 };
 type Template = { id: number; name: string; mapping: Record<string, unknown>; headerSig: string };
 
@@ -48,16 +51,6 @@ const FIELDS: Record<ImportKind, FieldDef[]> = {
     { key: "amount", label: tk("Bonus amount"), required: true, parse: "amount" },
     { key: "time", label: tk("Date & time"), required: true, parse: "time" },
   ],
-  flow: [
-    { key: "channel", label: tk("PG / bank"), required: true, parse: "text" },
-    { key: "date", label: tk("Date"), required: true, parse: "date" },
-    { key: "inAmount", label: tk("Money in"), parse: "amount" },
-    { key: "inCount", label: tk("In count"), parse: "int" },
-    { key: "outAmount", label: tk("Money out"), parse: "amount" },
-    { key: "outCount", label: tk("Out count"), parse: "int" },
-    { key: "fee", label: tk("Fee"), parse: "amount" },
-    { key: "note", label: tk("Note"), parse: "text" },
-  ],
 };
 
 // Header words we recognise, in English, Chinese and Malay/Indonesian.
@@ -66,18 +59,12 @@ const GUESS: Partial<Record<keyof ImportRow, string[]>> = {
   type: ["transaction type", "txn type", "type", "类型", "交易类型", "jenis", "tipe"],
   amount: ["amount", "amt", "credit", "金额", "数额", "jumlah", "nominal"],
   time: ["completed date", "completed time", "completed", "processed date", "approved", "transaction date", "date time", "datetime", "date", "time", "created at", "created", "submitted date", "日期", "时间", "完成时间", "tarikh", "masa", "tanggal", "waktu"],
-  date: ["date", "日期", "tarikh", "tanggal"],
   ref: ["reference", "ref", "transaction id", "txn id", "order id", "order", "单号", "订单号", "流水号", "referensi"],
   channel: ["payment gateway", "gateway", "bank", "channel", "pg", "method", "银行", "通道", "渠道", "metode"],
   note: ["remark", "remarks", "note", "notes", "备注", "catatan", "keterangan"],
   phone: ["phone", "mobile", "contact", "tel", "手机", "电话", "telepon", "hp"],
   name: ["full name", "real name", "name", "姓名", "名字", "nama"],
   promo: ["promotion", "promo", "bonus name", "campaign", "优惠", "活动", "promosi"],
-  inAmount: ["money in", "in amount", "deposit amount", "credit", "in", "入款", "进款", "masuk"],
-  inCount: ["in count", "deposit count", "入款笔数"],
-  outAmount: ["money out", "out amount", "withdraw amount", "debit", "out", "出款", "keluar"],
-  outCount: ["out count", "withdraw count", "出款笔数"],
-  fee: ["fee", "fees", "charges", "charge", "手续费", "biaya"],
 };
 
 const DEP_WORDS = ["dep", "in", "credit", "top", "充", "存", "入", "setor", "masuk"];
@@ -187,7 +174,7 @@ export function ImportWizard({ brands, initialBrand }: { brands: { id: number; n
   const [usingTemplate, setUsingTemplate] = useState<string | null>(null);
   const [saveAs, setSaveAs] = useState("");
   const [busy, setBusy] = useState<{ done: number; total: number } | null>(null);
-  const [summary, setSummary] = useState<{ inserted: number; skipped: number; created: number; problems: string[]; error?: string } | null>(null);
+  const [summary, setSummary] = useState<{ inserted: number; skipped: number; created: number; problems: string[]; newChannels: string[]; error?: string } | null>(null);
   const [readError, setReadError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -213,7 +200,9 @@ export function ImportWizard({ brands, initialBrand }: { brands: { id: number; n
     }
     setUsingTemplate(null);
     const rows = g.slice(hr + 1).filter((r) => r.some((c) => cellText(c) !== ""));
-    setMap({ headerRow: hr, fields: guessFields(k, hs), fixed: {}, typeValues: {}, dateFormat: "auto", filter: guessFilter(hs, rows) });
+    const fields = guessFields(k, hs);
+    const alt = hs.find((h) => h && h !== fields.channel && /method|gateway|\bpg\b|方式|渠道|metode/i.test(h));
+    setMap({ headerRow: hr, fields, fixed: {}, typeValues: {}, dateFormat: "auto", filter: guessFilter(hs, rows), fallback: fields.channel && alt ? { channel: alt } : undefined });
   }
 
   async function onFile(f: File | undefined) {
@@ -306,6 +295,8 @@ export function ImportWizard({ brands, initialBrand }: { brands: { id: number; n
           if (ww) (out[f.key] as string) = f.parse === "date" ? ww.slice(0, 10) : ww;
         } else {
           let v = cellText(cell);
+          const fb = map.fallback?.[f.key];
+          if (!v && fb && col(fb) >= 0) v = cellText(r[col(fb)]);
           if (f.key === "username" && map.firstWord) v = v.split(/\s+/)[0] ?? "";
           if (v) (out[f.key] as string) = v;
         }
@@ -329,7 +320,7 @@ export function ImportWizard({ brands, initialBrand }: { brands: { id: number; n
     const rows = parsed.rows;
     setBusy({ done: 0, total: rows.length });
     const batchId = await startImport(brandId, kind, fileName, rows.length);
-    const total = { inserted: 0, skipped: parsed.skipped + parsed.filtered, created: 0, problems: [...parsed.problems] as string[], error: undefined as string | undefined };
+    const total = { inserted: 0, skipped: parsed.skipped + parsed.filtered, created: 0, problems: [...parsed.problems] as string[], newChannels: [] as string[], error: undefined as string | undefined };
     for (let i = 0; i < rows.length; i += 500) {
       const r = await importChunk(batchId, rows.slice(i, i + 500), i);
       if (r.error) {
@@ -340,6 +331,7 @@ export function ImportWizard({ brands, initialBrand }: { brands: { id: number; n
       total.skipped += r.skipped;
       total.created += r.created;
       total.problems.push(...r.problems);
+      total.newChannels.push(...r.newChannels);
       setBusy({ done: Math.min(i + 500, rows.length), total: rows.length });
     }
     await finishImport(batchId);
@@ -383,7 +375,6 @@ export function ImportWizard({ brands, initialBrand }: { brands: { id: number; n
             <option value="txn">{t("Deposits / withdrawals")}</option>
             <option value="player">{t("Player list")}</option>
             <option value="claim">{t("Promotion claims")}</option>
-            <option value="flow">{t("PG / bank statement (daily totals)")}</option>
           </select>
         </label>
         <label className="block">
@@ -411,6 +402,14 @@ export function ImportWizard({ brands, initialBrand }: { brands: { id: number; n
             {t("{added} added · {skipped} skipped (already in the system, or marked “skip”)", { added: summary.inserted, skipped: summary.skipped })}
             {summary.created ? " · " + t("{n} new players created", { n: summary.created }) : ""}
           </div>
+          {summary.newChannels.length > 0 && (
+            <div className="mt-2 text-ink">
+              {t("New PG/bank accounts created: {names}.", { names: summary.newChannels.join(", ") })}{" "}
+              <Link className="link" href="/reconcile">
+                {t("Set their fee rate and starting balance")} →
+              </Link>
+            </div>
+          )}
           {summary.problems.length > 0 && (
             <details className="mt-2 text-ink">
               <summary className="cursor-pointer">{t("{n} rows couldn't be used", { n: summary.problems.length })}</summary>
@@ -486,7 +485,7 @@ export function ImportWizard({ brands, initialBrand }: { brands: { id: number; n
             <div className="mb-2 text-sm font-medium">4. {t("Match the columns")}</div>
             <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
               {fields.map((f) => {
-                const fixedOpts = f.key === "type" || (f.key === "promo" && kind === "claim") || (f.key === "channel" && kind === "flow");
+                const fixedOpts = f.key === "type" || (f.key === "promo" && kind === "claim") || (f.key === "channel" && kind === "txn");
                 return (
                   <div key={f.key}>
                     <span className="label">
@@ -521,6 +520,19 @@ export function ImportWizard({ brands, initialBrand }: { brands: { id: number; n
                     ) : (
                       <div className="flex flex-wrap gap-2">
                         <ColumnSelect headers={headers} value={map.fields[f.key]} onChange={(h) => setField(f.key, h)} />
+                        {f.key === "channel" && col(map.fields.channel) >= 0 && (
+                          <label className="flex items-center gap-2 text-xs text-ink-2">
+                            {t("If empty, use")}
+                            <select
+                              className="rounded border border-line bg-surface px-1 py-0.5 text-xs"
+                              value={map.fallback?.channel ?? ""}
+                              onChange={(e) => setMap({ ...map, fallback: { ...map.fallback, channel: e.target.value || undefined } })}
+                            >
+                              <option value="">—</option>
+                              {headers.map((h, i) => (h && h !== map.fields.channel ? <option key={i} value={h}>{h}</option> : null))}
+                            </select>
+                          </label>
+                        )}
                         {f.key === "username" && col(map.fields.username) >= 0 && (
                           <label className="flex items-center gap-2 text-xs text-ink-2">
                             <input type="checkbox" className="h-4 w-4 accent-[var(--brand)]" checked={!!map.firstWord} onChange={(e) => setMap({ ...map, firstWord: e.target.checked })} />

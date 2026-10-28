@@ -22,7 +22,8 @@ const ACTIONS: Record<string, { label: string; tone: "good" | "brand" | "critica
 
 const ENTITIES: Record<string, string> = {
   Txn: tk("Deposits & withdrawals"),
-  ChannelFlow: tk("PG & bank statements"),
+  ChannelMove: tk("Transfers and other movements"),
+  BalanceCheck: tk("Balance checks"),
   PromoClaim: tk("Promotion claims"),
   Player: tk("Players"),
   Expense: tk("Expenses"),
@@ -36,7 +37,6 @@ const ENTITIES: Record<string, string> = {
   Role: tk("Roles"),
   Setting: tk("Settings"),
   PayChannel: tk("PG & bank channels"),
-  ReconNote: tk("Reconciliation notes"),
   Shareholder: tk("Shareholders"),
   Holding: tk("Brand shares"),
   DividendRule: tk("Dividend rules"),

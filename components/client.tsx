@@ -5,7 +5,7 @@ import { useFormStatus } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useT } from "@/components/i18n";
 
-export type Result = { ok: boolean; message: string; at: number; data?: unknown } | null;
+export type Result = { ok: boolean; message: string; at: number; data?: unknown; warn?: boolean } | null;
 type Action = (prev: Result, fd: FormData) => Promise<Result>;
 
 const DialogClose = createContext<(() => void) | null>(null);
@@ -54,7 +54,7 @@ export function Message({ state }: { state: Result }) {
     if (!state) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setShown(state.at);
-    if (state.ok) {
+    if (state.ok && !state.warn) {
       const t = setTimeout(() => setShown(null), 4000);
       return () => clearTimeout(t);
     }
@@ -63,9 +63,9 @@ export function Message({ state }: { state: Result }) {
   return (
     <div
       role="status"
-      className={`mt-3 rounded-lg px-3 py-2 text-sm ${state.ok ? "bg-good-soft text-good-ink" : "bg-critical-soft text-critical-ink"}`}
+      className={`mt-3 rounded-lg px-3 py-2 text-sm ${state.warn ? "bg-warning-soft text-warning-ink" : state.ok ? "bg-good-soft text-good-ink" : "bg-critical-soft text-critical-ink"}`}
     >
-      {state.ok ? "✓ " : ""}
+      {state.ok && !state.warn ? "✓ " : state.warn ? "⚠ " : ""}
       {state.message}
     </div>
   );

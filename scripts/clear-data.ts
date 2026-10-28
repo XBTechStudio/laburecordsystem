@@ -9,7 +9,7 @@ const prisma = new PrismaClient();
 
 async function main() {
   if (!process.argv.includes("--yes")) {
-    console.log("This deletes every brand, player, transaction, statement, expense, promotion, CS log, shareholder and settlement.");
+    console.log("This deletes every brand, player, transaction, PG/bank account, balance check, expense, promotion, CS log, shareholder and settlement.");
     console.log("Run again with --yes to confirm:  npm run demo:clear -- --yes");
     return;
   }
@@ -24,8 +24,8 @@ async function main() {
     prisma.promoClaim.deleteMany(),
     prisma.promotion.deleteMany(),
     prisma.txn.deleteMany(),
-    prisma.channelFlow.deleteMany(),
-    prisma.reconNote.deleteMany(),
+    prisma.channelMove.deleteMany(),
+    prisma.balanceCheck.deleteMany(),
     prisma.expense.deleteMany(),
     prisma.player.deleteMany(),
     prisma.importBatch.deleteMany(),

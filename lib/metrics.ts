@@ -18,14 +18,10 @@ export type DayRow = {
   promo: number;
   expense: number;
   income: number;
-  flowIn: number;
-  flowInCount: number;
-  flowOut: number;
-  flowOutCount: number;
 };
 
-const MONEY: (keyof DayRow)[] = ["deposit", "withdraw", "fees", "promo", "expense", "income", "flowIn", "flowOut"];
-const NUMS = ["deposit", "depositCount", "withdraw", "withdrawCount", "fees", "promo", "expense", "income", "flowIn", "flowInCount", "flowOut", "flowOutCount"] as const;
+const MONEY: (keyof DayRow)[] = ["deposit", "withdraw", "fees", "promo", "expense", "income"];
+const NUMS = ["deposit", "depositCount", "withdraw", "withdrawCount", "fees", "promo", "expense", "income"] as const;
 
 export type Totals = Record<(typeof NUMS)[number], number> & { winlose: number; cost: number; profit: number };
 
@@ -39,15 +35,17 @@ export async function dailyRows(brandIds: number[], r: Range): Promise<DayRow[]>
   const d0 = dateOnly(r.from);
   const d1 = dateOnly(r.to);
 
-  const [txns, flows, claims, exps] = await Promise.all([
+  const [txns, fees, claims, exps] = await Promise.all([
     prisma.$queryRaw<{ brandId: number; d: Date; type: string; amt: unknown; cnt: bigint }[]>`
       SELECT brandId, DATE(DATE_ADD(txnAt, INTERVAL 8 HOUR)) AS d, type, SUM(amount) AS amt, COUNT(*) AS cnt
       FROM \`Txn\` WHERE brandId IN (${ids}) AND txnAt >= ${t0} AND txnAt < ${t1}
       GROUP BY brandId, d, type`,
-    prisma.$queryRaw<{ brandId: number; d: Date; fee: unknown; inA: unknown; inC: unknown; outA: unknown; outC: unknown }[]>`
-      SELECT brandId, date AS d, SUM(fee) AS fee, SUM(inAmount) AS inA, SUM(inCount) AS inC, SUM(outAmount) AS outA, SUM(outCount) AS outC
-      FROM \`ChannelFlow\` WHERE brandId IN (${ids}) AND date >= ${d0} AND date <= ${d1}
-      GROUP BY brandId, d`,
+    // PG/bank fees: each account's fee rate applied to the deposits it received.
+    prisma.$queryRaw<{ brandId: number; d: Date; fee: unknown }[]>`
+      SELECT t.brandId, DATE(DATE_ADD(t.txnAt, INTERVAL 8 HOUR)) AS d, SUM(t.amount * c.feePercent / 100 + c.feeFixed) AS fee
+      FROM \`Txn\` t JOIN \`PayChannel\` c ON c.id = t.channelId
+      WHERE t.type = 'DEPOSIT' AND t.brandId IN (${ids}) AND t.txnAt >= ${t0} AND t.txnAt < ${t1}
+      GROUP BY t.brandId, d`,
     prisma.$queryRaw<{ brandId: number; d: Date; amt: unknown }[]>`
       SELECT p.brandId, DATE(DATE_ADD(c.claimedAt, INTERVAL 8 HOUR)) AS d, SUM(c.amount) AS amt
       FROM \`PromoClaim\` c JOIN \`Promotion\` p ON p.id = c.promotionId
@@ -81,14 +79,7 @@ export async function dailyRows(brandIds: number[], r: Range): Promise<DayRow[]>
       row.withdrawCount += Number(t.cnt);
     }
   }
-  for (const f of flows) {
-    const row = get(f.brandId, f.d);
-    row.fees += n(f.fee as number);
-    row.flowIn += n(f.inA as number);
-    row.flowInCount += n(f.inC as number);
-    row.flowOut += n(f.outA as number);
-    row.flowOutCount += n(f.outC as number);
-  }
+  for (const f of fees) get(f.brandId, f.d).fees += n(f.fee as number);
   for (const c of claims) get(c.brandId, c.d).promo += n(c.amt as number);
   for (const e of exps) {
     const row = get(e.brandId, e.d);

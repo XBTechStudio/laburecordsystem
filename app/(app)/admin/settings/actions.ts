@@ -99,7 +99,9 @@ export async function saveChannel(_p: Result, fd: FormData) {
       type: str(fd, "type") === "BANK" ? ("BANK" as const) : ("PG" as const),
       feePercent: num(fd, "feePercent") || 0,
       feeFixed: num(fd, "feeFixed") || 0,
+      currency: (str(fd, "currency") || "MYR").toUpperCase(),
     };
+    need(/^[A-Z]{3}$/.test(data.currency), "Currency should be a 3-letter code like MYR or THB.");
     need(data.name, "Please enter the channel name.");
     need(data.feePercent >= 0 && data.feeFixed >= 0, "Fees can't be negative.");
     if (id) {

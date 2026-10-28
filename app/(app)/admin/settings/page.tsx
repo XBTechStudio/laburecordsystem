@@ -57,7 +57,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             </div>
             <fieldset className="space-y-2.5">
               <legend className="label">{t("Net profit = Win/Loss …")}</legend>
-              <Check name="fees" label={"− " + t("PG and bank fees")} hint={t("From the PG / bank statements you enter")} on={s.profit.fees} disabled={ro} />
+              <Check name="fees" label={"− " + t("PG and bank fees")} hint={t("Worked out from each PG/bank's fee rate on deposits")} on={s.profit.fees} disabled={ro} />
               <Check name="promos" label={"− " + t("Promotions given")} hint={t("From promotion claims")} on={s.profit.promos} disabled={ro} />
               <Check name="expenses" label={"− " + t("Expenses")} hint={t("Salary, advertising and your other expense categories")} on={s.profit.expenses} disabled={ro} />
               <Check name="income" label={"+ " + t("Other income")} hint={t("Income categories, e.g. provider rebates")} on={s.profit.income} disabled={ro} />
@@ -108,7 +108,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             >
               <input name="promoAdjustPercent" className="input w-32" inputMode="decimal" defaultValue={s.promoAdjustPercent} disabled={ro} />
             </Field>
-            <Field label={t("Reconciliation tolerance")} hint={t("Differences up to this amount between back office and PG/bank are treated as matched (rounding, small fees).")}>
+            <Field label={t("Reconciliation tolerance")} hint={t("Balance differences up to this amount count as matched (rounding, small charges).")}>
               <input name="reconTolerance" className="input w-32" inputMode="decimal" defaultValue={s.reconTolerance} disabled={ro} />
             </Field>
             {save()}
@@ -120,11 +120,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <Card
           flush
           title={t("Payment gateways and bank accounts")}
-          note={t("Used when entering transactions and statements. Fees are suggested automatically when a statement has no fee.")}
+          note={t("Pick these when entering transactions. Fees come from each account's rate; balances are checked under PG / bank reconciliation.")}
           action={
             !ro && (
               <Dialog label={"+ " + t("Add channel")} title={t("Add PG or bank")} className="btn btn-primary btn-sm">
-                <ChannelForm t={t} />
+                <ChannelForm t={t} base={s.baseCurrency} />
               </Dialog>
             )
           }
@@ -135,6 +135,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 <tr>
                   <th>{t("Name")}</th>
                   <th>{t("Type")}</th>
+                  <th>{t("Currency")}</th>
                   <th className="r">{t("Fee %")}</th>
                   <th className="r">{t("Fixed fee / txn")}</th>
                   <th>{t("Status")}</th>
@@ -146,13 +147,14 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                   <tr key={c.id} className={c.active ? "" : "opacity-60"}>
                     <td className="font-medium">{c.name}</td>
                     <td>{c.type === "PG" ? t("Payment gateway") : t("Bank")}</td>
+                    <td>{c.currency}</td>
                     <td className="r">{n(c.feePercent)}%</td>
                     <td className="r">{n(c.feeFixed).toFixed(2)}</td>
                     <td>{c.active ? <Chip tone="good">{t("Active")}</Chip> : <Chip>{t("Inactive")}</Chip>}</td>
                     {!ro && (
                       <td className="r space-x-1">
                         <Dialog label={t("Edit")} title={t("Edit {name}", { name: c.name })}>
-                          <ChannelForm t={t} c={{ id: c.id, name: c.name, type: c.type, feePercent: n(c.feePercent), feeFixed: n(c.feeFixed) }} />
+                          <ChannelForm t={t} base={s.baseCurrency} c={{ id: c.id, name: c.name, type: c.type, currency: c.currency, feePercent: n(c.feePercent), feeFixed: n(c.feeFixed) }} />
                         </Dialog>
                         <ActionButton action={toggleChannel} fields={{ id: c.id }}>
                           {c.active ? t("Deactivate") : t("Reactivate")}
@@ -163,7 +165,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 ))}
                 {channels.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="py-8 text-center text-ink-2">
+                    <td colSpan={7} className="py-8 text-center text-ink-2">
                       {t("No channels yet. Add each payment gateway and bank account you use.")}
                     </td>
                   </tr>
@@ -188,7 +190,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   );
 }
 
-function ChannelForm({ c, t }: { c?: { id: number; name: string; type: string; feePercent: number; feeFixed: number }; t: T }) {
+function ChannelForm({ c, t, base }: { c?: { id: number; name: string; type: string; currency: string; feePercent: number; feeFixed: number }; t: T; base: string }) {
   return (
     <ActionForm action={saveChannel} close className="space-y-3">
       {c && <input type="hidden" name="id" value={c.id} />}
@@ -202,11 +204,14 @@ function ChannelForm({ c, t }: { c?: { id: number; name: string; type: string; f
             <option value="BANK">{t("Bank account")}</option>
           </select>
         </Field>
-        <Field label={t("Fee %")} hint={t("Of each incoming amount")}>
+        <Field label={t("Fee %")} hint={t("Of each deposit")}>
           <input name="feePercent" className="input" inputMode="decimal" defaultValue={c?.feePercent ?? 0} />
         </Field>
-        <Field label={t("Fixed fee per transaction")}>
+        <Field label={t("Fixed fee per deposit")}>
           <input name="feeFixed" className="input" inputMode="decimal" defaultValue={c?.feeFixed ?? 0} />
+        </Field>
+        <Field label={t("Currency")}>
+          <input name="currency" className="input uppercase" defaultValue={c?.currency ?? base} maxLength={3} />
         </Field>
       </div>
       <div className="flex justify-end">

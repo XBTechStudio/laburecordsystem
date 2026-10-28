@@ -4,16 +4,17 @@ import { Prisma } from "@prisma/client";
 import { Denied } from "@/lib/auth";
 import { getT } from "@/lib/i18n-server";
 
-export type Result = { ok: boolean; message: string; at: number; data?: unknown } | null;
+/** `warn`: saved, but the person should look at the message (shown in amber instead of green). */
+export type Result = { ok: boolean; message: string; at: number; data?: unknown; warn?: boolean } | null;
 
 export class UserError extends Error {}
 
 /** Runs a server action body and turns any failure into a message the form can show. */
-export async function run(fn: () => Promise<string | void | { message: string; data?: unknown }>): Promise<Result> {
+export async function run(fn: () => Promise<string | void | { message: string; data?: unknown; warn?: boolean }>): Promise<Result> {
   const t = await getT();
   try {
     const r = await fn();
-    if (r && typeof r === "object") return { ok: true, message: t(r.message), data: r.data, at: Date.now() };
+    if (r && typeof r === "object") return { ok: true, message: t(r.message), data: r.data, warn: r.warn, at: Date.now() };
     return { ok: true, message: t(r || "Saved."), at: Date.now() };
   } catch (e) {
     if (e instanceof Denied || e instanceof UserError) return { ok: false, message: t(e.message), at: Date.now() };

@@ -17,6 +17,16 @@ enum ChannelType {
   BANK
 }
 
+/// How a manual balance movement changes a PG/bank account.
+enum MoveKind {
+  TRANSFER_IN
+  TRANSFER_OUT
+  TOPUP
+  CASHOUT
+  FEE
+  ADJUST
+}
+
 enum CategoryKind {
   EXPENSE
   INCOME
@@ -98,14 +108,12 @@ model Brand {
   users       UserBrand[]
   players     Player[]
   txns        Txn[]
-  flows       ChannelFlow[]
   expenses    Expense[]
   promotions  Promotion[]
   holdings    Holding[]
   rule        DividendRule?
   settlements Settlement[]
   imports     ImportBatch[]
-  reconNotes  ReconNote[]
 }
 
 model Player {
@@ -167,54 +175,62 @@ model Txn {
   @@index([createdById, createdAt])
 }
 
+/// A PG or bank account. Its system balance = opening balance + deposits − withdrawals − fees ± moves,
+/// counted from `openingAt`; staff compare that with the real balance in BalanceCheck.
 model PayChannel {
-  id         Int         @id @default(autoincrement())
-  name       String      @unique @db.VarChar(80)
-  type       ChannelType
-  /// Fee charged on money coming in, % of amount plus a fixed amount per transaction.
-  feePercent Decimal     @default(0) @db.Decimal(6, 3)
-  feeFixed   Decimal     @default(0) @db.Decimal(10, 2)
-  active     Boolean     @default(true)
+  id             Int         @id @default(autoincrement())
+  name           String      @unique @db.VarChar(80)
+  type           ChannelType
+  currency       String      @default("MYR") @db.VarChar(3)
+  /// Fee charged on money coming in, % of amount plus a fixed amount per deposit.
+  feePercent     Decimal     @default(0) @db.Decimal(6, 3)
+  feeFixed       Decimal     @default(0) @db.Decimal(10, 2)
+  openingBalance Decimal     @default(0) @db.Decimal(14, 2)
+  /// Balance tracking starts here; null = from the very first transaction.
+  openingAt      DateTime?
+  active         Boolean     @default(true)
 
-  txns  Txn[]
-  flows ChannelFlow[]
+  txns   Txn[]
+  moves  ChannelMove[]
+  checks BalanceCheck[]
 }
 
-/// What a PG or bank statement says for one brand on one day.
-model ChannelFlow {
-  id          Int      @id @default(autoincrement())
-  brandId     Int
+/// Money moved in or out of an account outside player transactions: transfers between accounts,
+/// capital top-ups, cash-outs, bank charges and corrections. Positive adds to the balance.
+model ChannelMove {
+  id          Int        @id @default(autoincrement())
   channelId   Int
-  date        DateTime @db.Date
-  inAmount    Decimal  @default(0) @db.Decimal(14, 2)
-  inCount     Int      @default(0)
-  outAmount   Decimal  @default(0) @db.Decimal(14, 2)
-  outCount    Int      @default(0)
-  fee         Decimal  @default(0) @db.Decimal(12, 2)
-  note        String?  @db.VarChar(255)
-  createdById Int?
-  importId    Int?
-  createdAt   DateTime @default(now())
+  kind        MoveKind
+  amount      Decimal    @db.Decimal(14, 2)
+  at          DateTime
+  /// Links the two halves of a transfer.
+  transferRef String?    @db.VarChar(40)
+  note        String?    @db.VarChar(255)
+  userName    String?    @db.VarChar(80)
+  createdAt   DateTime   @default(now())
 
-  brand   Brand      @relation(fields: [brandId], references: [id])
-  channel PayChannel @relation(fields: [channelId], references: [id])
+  channel PayChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
-  @@unique([brandId, channelId, date])
-  @@index([date])
+  @@index([channelId, at])
+  @@index([transferRef])
 }
 
-model ReconNote {
-  id        Int      @id @default(autoincrement())
-  brandId   Int
-  date      DateTime @db.Date
-  note      String   @db.VarChar(500)
-  resolved  Boolean  @default(false)
-  userName  String?  @db.VarChar(80)
-  updatedAt DateTime @updatedAt
+/// A real balance someone read from the bank/PG, and what the system expected at that moment.
+model BalanceCheck {
+  id        Int        @id @default(autoincrement())
+  channelId Int
+  at        DateTime
+  actual    Decimal    @db.Decimal(14, 2)
+  expected  Decimal    @db.Decimal(14, 2)
+  note      String?    @db.VarChar(255)
+  /// The difference was explained or booked as an adjustment.
+  resolved  Boolean    @default(false)
+  userName  String?    @db.VarChar(80)
+  createdAt DateTime   @default(now())
 
-  brand Brand @relation(fields: [brandId], references: [id])
+  channel PayChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
-  @@unique([brandId, date])
+  @@index([channelId, at])
 }
 
 model ExpenseCategory {

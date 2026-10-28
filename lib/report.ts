@@ -28,7 +28,7 @@ export const METRICS: { key: string; label: string; kind: "money" | "count" | "p
   { key: "withdrawCount", label: tk("Withdrawal count"), kind: "count", explain: tk("Number of withdrawals."), get: (t) => t.withdrawCount },
   { key: "winlose", label: tk("Win/Loss"), kind: "money", explain: tk("Deposits − withdrawals."), get: (t) => t.winlose },
   { key: "wlPct", label: tk("W/L %"), kind: "pct", explain: tk("Win/Loss as a % of deposits."), get: (t) => (t.deposit ? (t.winlose / t.deposit) * 100 : 0) },
-  { key: "fees", label: tk("PG/bank fees"), kind: "money", explain: tk("Fees from the PG and bank statements entered."), get: (t) => t.fees },
+  { key: "fees", label: tk("PG/bank fees"), kind: "money", explain: tk("Each PG/bank's fee rate applied to the deposits it received."), get: (t) => t.fees },
   { key: "promo", label: tk("Promotions"), kind: "money", explain: tk("Bonus amounts from promotion claims."), get: (t) => t.promo },
   { key: "expense", label: tk("Expenses"), kind: "money", explain: tk("Salary, advertising and other expense categories."), get: (t) => t.expense },
   { key: "income", label: tk("Other income"), kind: "money", explain: tk("Income categories, e.g. provider rebates."), get: (t) => t.income },

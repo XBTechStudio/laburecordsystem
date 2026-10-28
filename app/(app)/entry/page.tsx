@@ -6,7 +6,7 @@ import { Card, Chip, Empty, Field, PageHeader, TableWrap, Tabs } from "@/compone
 import { can, requirePage, type CurrentUser } from "@/lib/auth";
 import { dayStart, addDays, toLocalInput, todayStr } from "@/lib/dates";
 import { prisma } from "@/lib/db";
-import { d10, dt, money, n } from "@/lib/format";
+import { dt, money, n } from "@/lib/format";
 import { tk, type T } from "@/lib/i18n";
 import { getT } from "@/lib/i18n-server";
 import { getScope } from "@/lib/scope";
@@ -14,7 +14,6 @@ import { deleteEntry, loadLists, saveBatch, updateEntry } from "./actions";
 
 const KINDS = [
   { key: "txn", label: tk("Deposits & withdrawals") },
-  { key: "flow", label: tk("PG & bank statements") },
   { key: "claim", label: tk("Promotion claims") },
   { key: "player", label: tk("Players") },
 ] as const;
@@ -65,16 +64,6 @@ export default async function EntryPage({ searchParams }: { searchParams: Promis
       { key: "ref", label: t("Reference no."), type: "text", width: "9rem", placeholder: t("optional") },
       { key: "note", label: t("Note"), type: "text", width: "9rem" },
     ],
-    flow: [
-      { key: "channel", label: t("PG / bank"), type: "select", required: true, options: chOpts, width: "10rem" },
-      { key: "date", label: t("Date"), type: "date", width: "9rem" },
-      { key: "inAmount", label: t("Money in"), type: "amount", width: "7rem" },
-      { key: "inCount", label: t("In count"), type: "int", width: "5rem" },
-      { key: "outAmount", label: t("Money out"), type: "amount", width: "7rem" },
-      { key: "outCount", label: t("Out count"), type: "int", width: "5rem" },
-      { key: "fee", label: t("Fee"), type: "amount", width: "6rem", placeholder: t("auto") },
-      { key: "note", label: t("Note"), type: "text", width: "9rem" },
-    ],
     claim: [
       { key: "player", label: t("Player username"), type: "player", required: true, width: "11rem" },
       { key: "promo", label: t("Promotion"), type: "combo", list: "promos", required: true, width: "12rem", placeholder: t("pick or type a new one") },
@@ -90,30 +79,10 @@ export default async function EntryPage({ searchParams }: { searchParams: Promis
   };
 
   const notes: Record<Kind, string> = {
-    txn: t("New usernames are created as players automatically."),
-    flow: t("One row per PG/bank per day, as shown on the statement. Leave Fee empty to calculate it from the channel's fee rate. Entering the same day again replaces it."),
+    txn: t("New usernames are created as players automatically. Choose the PG / bank so its balance stays right."),
     claim: t("Type a promotion name that doesn't exist yet and it will be created."),
     player: t("Existing usernames are updated with the phone/name/note you enter."),
   };
-
-  if (kind === "flow" && channels.length === 0) {
-    return (
-      <Shell kind={kind} t={t}>
-        <Card>
-          <Empty title={t("Add your PG and bank channels first")}>
-            {t("Statements are entered per payment gateway or bank account.")}{" "}
-            {can(user, "settings", 3) ? (
-              <Link className="link" href="/admin/settings?tab=channels">
-                {t("Add channels in Settings")}
-              </Link>
-            ) : (
-              t("Ask an administrator to add them in Settings.")
-            )}
-          </Empty>
-        </Card>
-      </Shell>
-    );
-  }
 
   return (
     <Shell kind={kind} t={t}>
@@ -129,14 +98,9 @@ export default async function EntryPage({ searchParams }: { searchParams: Promis
         totals={
           kind === "txn"
             ? [{ col: "amount", label: "", split: { by: "type", values: { DEPOSIT: t("Deposits"), WITHDRAW: t("Withdrawals") } } }]
-            : kind === "flow"
-              ? [
-                  { col: "inAmount", label: t("In") },
-                  { col: "outAmount", label: t("Out") },
-                ]
-              : kind === "claim"
-                ? [{ col: "amount", label: t("Bonus") }]
-                : []
+            : kind === "claim"
+              ? [{ col: "amount", label: t("Bonus") }]
+              : []
         }
       />
       <Recent user={user} kind={kind} sp={sp} brandIds={scope.brandIds} channels={chOpts} brandCurrency={scope.brandCurrency} brandName={scope.brandName} multi={!scope.current} />
@@ -294,72 +258,6 @@ async function Recent({
                   </div>
                 </>,
                 t("transaction"),
-              )}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    );
-  } else if (kind === "flow") {
-    const rows = await prisma.channelFlow.findMany({
-      where: { brandId: { in: brandIds }, createdAt: created, ...mine },
-      include: { channel: true },
-      orderBy: { id: "desc" },
-      take: 200,
-    });
-    total = rows.length;
-    table = (
-      <table className="tbl">
-        <thead>
-          <tr>
-            <th>{t("Date")}</th>
-            {multi && <th>{t("Brand")}</th>}
-            <th>{t("PG / bank")}</th>
-            <th className="r">{t("In")}</th>
-            <th className="r">{t("Out")}</th>
-            <th className="r">{t("Fee")}</th>
-            <th>{t("Note")}</th>
-            <th />
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((f) => (
-            <tr key={f.id}>
-              <td className="whitespace-nowrap">{d10(f.date)}</td>
-              {multi && <td className="text-ink-2">{brandName(f.brandId)}</td>}
-              <td className="font-medium">{f.channel.name}</td>
-              <td className="r">
-                {money(f.inAmount, brandCurrency(f.brandId))} <span className="text-xs text-muted">({f.inCount})</span>
-              </td>
-              <td className="r">
-                {money(f.outAmount, brandCurrency(f.brandId))} <span className="text-xs text-muted">({f.outCount})</span>
-              </td>
-              <td className="r">{money(f.fee, brandCurrency(f.brandId))}</td>
-              <td className="max-w-48 truncate text-ink-2">{f.note ?? ""}</td>
-              {actions(
-                f.id,
-                canChange(f.createdById, f.createdAt),
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label={t("Money in")}>
-                    <input name="inAmount" className="input" defaultValue={n(f.inAmount)} inputMode="decimal" />
-                  </Field>
-                  <Field label={t("In count")}>
-                    <input name="inCount" className="input" defaultValue={f.inCount} inputMode="numeric" />
-                  </Field>
-                  <Field label={t("Money out")}>
-                    <input name="outAmount" className="input" defaultValue={n(f.outAmount)} inputMode="decimal" />
-                  </Field>
-                  <Field label={t("Out count")}>
-                    <input name="outCount" className="input" defaultValue={f.outCount} inputMode="numeric" />
-                  </Field>
-                  <Field label={t("Fee")}>
-                    <input name="fee" className="input" defaultValue={n(f.fee)} inputMode="decimal" />
-                  </Field>
-                  <Field label={t("Note")}>
-                    <input name="note" className="input" defaultValue={f.note ?? ""} />
-                  </Field>
-                </div>,
-                t("statement row"),
               )}
             </tr>
           ))}

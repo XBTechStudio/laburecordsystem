@@ -134,38 +134,6 @@ export async function saveBatch(kind: string, brandId: number, rows: Row[], defa
       return done(t("Saved {n} transactions.", { n: parsed.length }) + (created ? " " + t("{n} new players added.", { n: created }) : ""));
     }
 
-    if (kind === "flow") {
-      const channels = new Map((await prisma.payChannel.findMany()).map((c) => [c.id, c]));
-      const parsed = rows.map((r, i) => {
-        const ch = channels.get(Number(r.channel));
-        const d = day(r.date, defaultDate);
-        const vals = { inAmount: pos(r.inAmount || "0"), inCount: pos(r.inCount || "0"), outAmount: pos(r.outAmount || "0"), outCount: pos(r.outCount || "0") };
-        const feeGiven = (r.fee ?? "").trim() !== "";
-        const fee = feeGiven ? pos(r.fee) : ch ? (vals.inAmount * Number(ch.feePercent)) / 100 + vals.inCount * Number(ch.feeFixed) : 0;
-        if (!ch) fail(i, "Choose the PG or bank");
-        else if (!d) fail(i, "Date isn't valid");
-        else if (Object.values(vals).some((x) => Number.isNaN(x)) || Number.isNaN(fee)) fail(i, "Amounts and counts must be numbers");
-        return { channelId: ch?.id ?? 0, date: d ?? "", ...vals, fee: Math.round(fee * 100) / 100, note: r.note?.trim() || null };
-      });
-      const seen = new Set<string>();
-      parsed.forEach((p, i) => {
-        const k = `${p.channelId}|${p.date}`;
-        if (seen.has(k)) fail(i, "Same PG/bank and date appears twice in this batch");
-        seen.add(k);
-      });
-      if (errors.length) return { ok: false, message: NOTHING, errors };
-      let updated = 0;
-      for (const p of parsed) {
-        const where = { brandId_channelId_date: { brandId, channelId: p.channelId, date: dateOnly(p.date) } };
-        const exists = await prisma.channelFlow.findUnique({ where });
-        const data = { inAmount: p.inAmount, inCount: Math.round(p.inCount), outAmount: p.outAmount, outCount: Math.round(p.outCount), fee: p.fee, note: p.note };
-        if (exists) updated++;
-        await prisma.channelFlow.upsert({ where, create: { brandId, channelId: p.channelId, date: dateOnly(p.date), ...data, createdById: user.id }, update: data });
-      }
-      await audit(user, "CREATE", "ChannelFlow", null, brandId, `Entered ${parsed.length} PG/bank statement rows for ${brand.name}`, { updated });
-      return done(t("Saved {n} statement rows.", { n: parsed.length }) + (updated ? " " + t("{n} replaced an existing day.", { n: updated }) : ""));
-    }
-
     if (kind === "claim") {
       const promos = await prisma.promotion.findMany({ where: { brandId } });
       const byName = new Map(promos.map((p) => [p.name.toLowerCase(), p]));
@@ -277,11 +245,6 @@ export async function deleteEntry(_p: Result, fd: FormData) {
       await prisma.txn.delete({ where: { id } });
       await refreshPlayerStats([t.playerId]);
       await audit(user, "DELETE", "Txn", id, t.brandId, `Deleted ${t.type.toLowerCase()} of ${t.amount} for ${t.player.username}`, t);
-    } else if (kind === "flow") {
-      const f = await prisma.channelFlow.findUniqueOrThrow({ where: { id } });
-      const user = await mayChange(f.createdById, f.createdAt, f.brandId);
-      await prisma.channelFlow.delete({ where: { id } });
-      await audit(user, "DELETE", "ChannelFlow", id, f.brandId, `Deleted statement row for ${f.date.toISOString().slice(0, 10)}`, f);
     } else if (kind === "claim") {
       const c = await prisma.promoClaim.findUniqueOrThrow({ where: { id }, include: { promotion: true } });
       const user = await mayChange(c.createdById, c.createdAt, c.promotion.brandId);
@@ -327,20 +290,6 @@ export async function updateEntry(_p: Result, fd: FormData) {
       await prisma.txn.update({ where: { id }, data });
       await refreshPlayerStats([t.playerId]);
       await audit(user, "UPDATE", "Txn", id, t.brandId, `Edited ${data.type.toLowerCase()} #${id}`, { before: t, after: data });
-    } else if (kind === "flow") {
-      const f = await prisma.channelFlow.findUniqueOrThrow({ where: { id } });
-      const user = await mayChange(f.createdById, f.createdAt, f.brandId);
-      const data = {
-        inAmount: pos(str(fd, "inAmount") || "0"),
-        inCount: Math.round(pos(str(fd, "inCount") || "0")),
-        outAmount: pos(str(fd, "outAmount") || "0"),
-        outCount: Math.round(pos(str(fd, "outCount") || "0")),
-        fee: pos(str(fd, "fee") || "0"),
-        note: str(fd, "note") || null,
-      };
-      need(Object.values(data).every((v) => v === null || !Number.isNaN(v)), "Amounts must be numbers.");
-      await prisma.channelFlow.update({ where: { id }, data });
-      await audit(user, "UPDATE", "ChannelFlow", id, f.brandId, `Edited statement row #${id}`, { before: f, after: data });
     } else if (kind === "claim") {
       const c = await prisma.promoClaim.findUniqueOrThrow({ where: { id }, include: { promotion: true } });
       const user = await mayChange(c.createdById, c.createdAt, c.promotion.brandId);

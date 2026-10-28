@@ -21,7 +21,7 @@ export const MODULES = [
   { key: "churn", href: "/churn", label: tk("Churn follow-up"), levels: [0, 1, 2, 3], hint: tk("Add = log contacts · Full = assign players to others") },
   { key: "promotions", href: "/promotions", label: tk("Promotions"), levels: [0, 1, 3], hint: tk("Full = create and edit promotions") },
   { key: "cs", href: "/cs", label: tk("CS recall tracking"), levels: [0, 1, 2, 3], hint: tk("Add = log own contacts · Full = edit/delete any log") },
-  { key: "reconcile", href: "/reconcile", label: tk("PG / bank reconciliation"), levels: [0, 1, 3], hint: tk("Full = write notes and mark days as checked") },
+  { key: "reconcile", href: "/reconcile", label: tk("PG / bank reconciliation"), levels: [0, 1, 2, 3], hint: tk("Add = enter real balances and transfers · Full = corrections, starting balances, deletions") },
   { key: "expenses", href: "/expenses", label: tk("Expenses & profit"), levels: [0, 1, 2, 3], hint: tk("Add = enter expenses · Full = edit/delete and manage categories") },
   { key: "dividends", href: "/dividends", label: tk("Shareholder dividends"), levels: [0, 1, 3], hint: tk("Full = shares, rules, settlements and payments") },
   { key: "brands", href: "/admin/brands", label: tk("Brands"), levels: [0, 1, 3], hint: "" },
