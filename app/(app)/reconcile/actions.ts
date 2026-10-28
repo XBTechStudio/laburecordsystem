@@ -7,11 +7,12 @@ import { guard } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { amount, int, need, run, str, type Result } from "@/lib/action";
 import { expectedBalances } from "@/lib/balances";
-import { fromLocalInput } from "@/lib/dates";
+import { fromLocalInput, todayStr } from "@/lib/dates";
 import { prisma } from "@/lib/db";
 import { money, n } from "@/lib/format";
 import { getT } from "@/lib/i18n-server";
 import { getSettings } from "@/lib/settings";
+import { checkStatementUrl, syncStatements } from "@/lib/statements";
 
 const TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
 const when = (fd: FormData) => (TIME.test(str(fd, "time")) ? fromLocalInput(str(fd, "time")) : new Date());
@@ -122,16 +123,40 @@ export async function setOpening(_p: Result, fd: FormData) {
     const currency = (str(fd, "currency") || "MYR").toUpperCase();
     need(feePercent >= 0 && feeFixed >= 0, "Fees can't be negative.");
     need(/^[A-Z]{3}$/.test(currency), "Currency should be a 3-letter code like MYR or THB.");
+    const statementUrl = str(fd, "statementUrl") ? checkStatementUrl(str(fd, "statementUrl")) : null;
     const before = await prisma.payChannel.findUniqueOrThrow({ where: { id } });
+    const newLink = statementUrl !== before.statementUrl;
     await prisma.payChannel.update({
       where: { id },
-      data: { openingBalance: bal, openingAt: at, feePercent, feeFixed, currency, type: str(fd, "type") === "PG" ? "PG" : "BANK", feeAtSettlement: fd.get("feeAtSettlement") === "on" },
+      data: {
+        openingBalance: bal,
+        openingAt: at,
+        feePercent,
+        feeFixed,
+        currency,
+        type: str(fd, "type") === "PG" ? "PG" : "BANK",
+        feeAtSettlement: fd.get("feeAtSettlement") === "on",
+        statementUrl,
+        ...(newLink ? { statementError: null, statementReadAt: null } : {}),
+      },
     });
     await audit(user, "UPDATE", "PayChannel", id, null, `Starting balance of ${before.name} set to ${bal}`, {
-      before: { openingBalance: before.openingBalance, openingAt: before.openingAt },
-      after: { openingBalance: bal, openingAt: at },
+      before: { openingBalance: before.openingBalance, openingAt: before.openingAt, statementUrl: before.statementUrl },
+      after: { openingBalance: bal, openingAt: at, statementUrl },
     });
     refresh(id);
+    // Try a new link straight away, so a wrong one shows up now rather than later.
+    if (statementUrl && newLink) {
+      const r = await syncStatements(todayStr(), [id]);
+      revalidatePath("/reconcile/statements", "layout");
+      if (r.failed) {
+        const t = await getT();
+        const err = (await prisma.payChannel.findUnique({ where: { id }, select: { statementError: true } }))?.statementError;
+        return { message: t("Account saved, but the statement page couldn't be read: {reason}", { reason: t(err ?? "") }), warn: true };
+      }
+      if (r.read) return "Account saved. Today's statement was read.";
+      return "Account saved. The statement page has nothing for today yet.";
+    }
     return "Account saved.";
   });
 }

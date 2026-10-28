@@ -11,6 +11,7 @@ import { getT } from "@/lib/i18n-server";
 import { getSettings } from "@/lib/settings";
 import { deleteCheck, deleteMove } from "./actions";
 import { BalanceForm, MoveForm, ResolveForm, TransferForm } from "./forms";
+import { ReconcileTabs } from "./parts";
 
 const MOVE_LABEL: Record<string, string> = {
   TRANSFER_IN: tk("Transfer in"),
@@ -60,33 +61,36 @@ export default async function ReconcilePage() {
 
   return (
     <div className="max-w-[1400px] space-y-5">
-      <PageHeader
-        title={t("PG / bank reconciliation")}
-        desc={
-          <>
-            {t("What each account should hold, compared with its real balance.")}{" "}
-            <Info>
-              {t(
-                "System balance = starting balance + deposits − withdrawals − fees (each account's fee rate) ± transfers and other movements. Enter the real balance from the bank or PG and the difference shows at once. Differences up to {tol} count as matched.",
-                { tol },
-              )}
-            </Info>
-          </>
-        }
-        actions={
-          canAdd &&
-          accounts.length > 0 && (
+      <div>
+        <PageHeader
+          title={t("PG / bank reconciliation")}
+          desc={
             <>
-              <Dialog label={"+ " + t("Transfer between accounts")} title={t("Transfer between accounts")}>
-                <TransferForm accounts={accs} t={t} />
-              </Dialog>
-              <Dialog label={"+ " + t("Other movement")} title={t("Money in or out of an account")}>
-                <MoveForm accounts={accs} t={t} allowAdjust={full} />
-              </Dialog>
+              {t("What each account should hold, compared with its real balance.")}{" "}
+              <Info>
+                {t(
+                  "System balance = starting balance + deposits − withdrawals − fees (each account's fee rate) ± transfers and other movements. Enter the real balance from the bank or PG and the difference shows at once. Differences up to {tol} count as matched.",
+                  { tol },
+                )}
+              </Info>
             </>
-          )
-        }
-      />
+          }
+          actions={
+            canAdd &&
+            accounts.length > 0 && (
+              <>
+                <Dialog label={"+ " + t("Transfer between accounts")} title={t("Transfer between accounts")}>
+                  <TransferForm accounts={accs} t={t} />
+                </Dialog>
+                <Dialog label={"+ " + t("Other movement")} title={t("Money in or out of an account")}>
+                  <MoveForm accounts={accs} t={t} allowAdjust={full} />
+                </Dialog>
+              </>
+            )
+          }
+        />
+        <ReconcileTabs active="balances" t={t} />
+      </div>
 
       {accounts.length === 0 ? (
         <Card>

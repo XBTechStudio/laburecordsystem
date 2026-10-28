@@ -127,6 +127,12 @@ function guessFilter(headers: string[], body: Cell[][]): Mapping["filter"] {
   return done.length && done.length < values.length ? { col: headers[i], values: done } : undefined;
 }
 
+/** "Min Min Win ✔ (T12146 …)VIP-GOLD" → "Min Min Win": the words before the first tag or symbol. */
+function realName(s: string) {
+  const m = s.match(/^[\p{L}\p{M}][\p{L}\p{M}' .-]*/u);
+  return m ? m[0].replace(/[ .-]+$/, "").slice(0, 80) : "";
+}
+
 function plus8(when: string) {
   const d = new Date(new Date(when + ":00Z").getTime() + 8 * 3600_000);
   return d.toISOString().slice(0, 16);
@@ -239,6 +245,7 @@ export function ImportWizard({ brands, initialBrand }: { brands: { id: number; n
   }, [body, filterCol]);
   const filterValues = [...filterCounts.keys()].filter(Boolean).slice(0, 30);
   const sampleUser = map && col(map.fields.username) >= 0 ? cellText(body[0]?.[col(map.fields.username)]).slice(0, 40) : "";
+  const sampleName = realName(sampleUser.split(/\s+/).slice(1).join(" "));
 
   const fields = FIELDS[kind];
   const typeMode: "column" | "DEPOSIT" | "WITHDRAW" = map?.fixed.type ?? "column";
@@ -297,7 +304,13 @@ export function ImportWizard({ brands, initialBrand }: { brands: { id: number; n
           let v = cellText(cell);
           const fb = map.fallback?.[f.key];
           if (!v && fb && col(fb) >= 0) v = cellText(r[col(fb)]);
-          if (f.key === "username" && map.firstWord) v = v.split(/\s+/)[0] ?? "";
+          if (f.key === "username" && map.firstWord) {
+            const [first = "", ...rest] = v.split(/\s+/);
+            // After the username these files usually carry the player's real name: keep it, statements show payer names.
+            const name = realName(rest.join(" "));
+            if (name && fields.some((x) => x.key === "name")) out.name = name;
+            v = first;
+          }
           if (v) (out[f.key] as string) = v;
         }
         if (f.required && out[f.key] == null && !bad) bad = t("{field} is empty", { field });
@@ -537,7 +550,12 @@ export function ImportWizard({ brands, initialBrand }: { brands: { id: number; n
                           <label className="flex items-center gap-2 text-xs text-ink-2">
                             <input type="checkbox" className="h-4 w-4 accent-[var(--brand)]" checked={!!map.firstWord} onChange={(e) => setMap({ ...map, firstWord: e.target.checked })} />
                             {t("Use only the first word")}
-                            {sampleUser && <span className="text-muted">({sampleUser} → {sampleUser.split(/\s+/)[0]})</span>}
+                            {sampleUser && (
+                              <span className="text-muted">
+                                ({sampleUser} → {sampleUser.split(/\s+/)[0]}
+                                {sampleName && ` · ${t("Name")}: ${sampleName}`})
+                              </span>
+                            )}
                           </label>
                         )}
                         {fixedOpts && (

@@ -183,38 +183,66 @@ model Txn {
 /// A PG or bank account. Its system balance = opening balance + deposits − withdrawals − fees ± moves,
 /// counted from `openingAt`; staff compare that with the real balance in BalanceCheck.
 model PayChannel {
-  id             Int         @id @default(autoincrement())
-  name           String      @unique @db.VarChar(80)
-  type           ChannelType
-  currency       String      @default("MYR") @db.VarChar(3)
+  id              Int         @id @default(autoincrement())
+  name            String      @unique @db.VarChar(80)
+  type            ChannelType
+  currency        String      @default("MYR") @db.VarChar(3)
   /// Fee charged on money coming in, % of amount plus a fixed amount per deposit.
-  feePercent     Decimal     @default(0) @db.Decimal(6, 3)
-  feeFixed       Decimal     @default(0) @db.Decimal(10, 2)
+  feePercent      Decimal     @default(0) @db.Decimal(6, 3)
+  feeFixed        Decimal     @default(0) @db.Decimal(10, 2)
   /// The PG keeps deposits in full and takes its fee when it pays out (settlement), so the balance isn't reduced per deposit.
-  feeAtSettlement Boolean    @default(false)
-  openingBalance Decimal     @default(0) @db.Decimal(14, 2)
+  feeAtSettlement Boolean     @default(false)
+  openingBalance  Decimal     @default(0) @db.Decimal(14, 2)
   /// Balance tracking starts here; null = from the very first transaction.
-  openingAt      DateTime?
-  active         Boolean     @default(true)
+  openingAt       DateTime?
+  active          Boolean     @default(true)
+  /// The PG's or agent's own daily statement page; the system reads it and matches it line by line.
+  statementUrl    String?     @db.VarChar(300)
+  /// Last attempt to read the statement page, and what went wrong (null = it worked).
+  statementReadAt DateTime?
+  statementError  String?     @db.VarChar(255)
 
-  txns   Txn[]
-  moves  ChannelMove[]
-  checks BalanceCheck[]
+  txns       Txn[]
+  moves      ChannelMove[]
+  checks     BalanceCheck[]
+  statements StatementDay[]
+}
+
+/// One day of an account's statement page, as last read.
+/// lines: [{ k: "IN" | "OUT", t: "HH:MM:SS", name, amount }] in the page's order (Malaysia/Singapore time).
+model StatementDay {
+  id        Int       @id @default(autoincrement())
+  channelId Int
+  day       DateTime  @db.Date
+  totalIn   Decimal   @db.Decimal(14, 2)
+  shouldPay Decimal?  @db.Decimal(14, 2)
+  totalOut  Decimal   @db.Decimal(14, 2)
+  remaining Decimal?  @db.Decimal(14, 2)
+  lines     Json
+  readAt    DateTime
+  /// Someone looked at the differences and is happy with them.
+  checkedBy String?   @db.VarChar(80)
+  checkedAt DateTime?
+  note      String?   @db.VarChar(255)
+
+  channel PayChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, day])
 }
 
 /// Money moved in or out of an account outside player transactions: transfers between accounts,
 /// capital top-ups, cash-outs, bank charges and corrections. Positive adds to the balance.
 model ChannelMove {
-  id          Int        @id @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   channelId   Int
   kind        MoveKind
-  amount      Decimal    @db.Decimal(14, 2)
+  amount      Decimal  @db.Decimal(14, 2)
   at          DateTime
   /// Links the two halves of a transfer.
-  transferRef String?    @db.VarChar(40)
-  note        String?    @db.VarChar(255)
-  userName    String?    @db.VarChar(80)
-  createdAt   DateTime   @default(now())
+  transferRef String?  @db.VarChar(40)
+  note        String?  @db.VarChar(255)
+  userName    String?  @db.VarChar(80)
+  createdAt   DateTime @default(now())
 
   channel PayChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
@@ -224,16 +252,16 @@ model ChannelMove {
 
 /// A real balance someone read from the bank/PG, and what the system expected at that moment.
 model BalanceCheck {
-  id        Int        @id @default(autoincrement())
+  id        Int      @id @default(autoincrement())
   channelId Int
   at        DateTime
-  actual    Decimal    @db.Decimal(14, 2)
-  expected  Decimal    @db.Decimal(14, 2)
-  note      String?    @db.VarChar(255)
+  actual    Decimal  @db.Decimal(14, 2)
+  expected  Decimal  @db.Decimal(14, 2)
+  note      String?  @db.VarChar(255)
   /// The difference was explained or booked as an adjustment.
-  resolved  Boolean    @default(false)
-  userName  String?    @db.VarChar(80)
-  createdAt DateTime   @default(now())
+  resolved  Boolean  @default(false)
+  userName  String?  @db.VarChar(80)
+  createdAt DateTime @default(now())
 
   channel PayChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
@@ -394,8 +422,8 @@ model SettlementLine {
   amount        Decimal @db.Decimal(14, 2)
   paid          Decimal @default(0) @db.Decimal(14, 2)
 
-  settlement  Settlement      @relation(fields: [settlementId], references: [id], onDelete: Cascade)
-  shareholder Shareholder     @relation(fields: [shareholderId], references: [id])
+  settlement  Settlement        @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+  shareholder Shareholder       @relation(fields: [shareholderId], references: [id])
   payments    DividendPayment[]
 }
 
@@ -413,29 +441,29 @@ model DividendPayment {
 // ---------- tools ----------
 
 model ImportBatch {
-  id          Int       @id @default(autoincrement())
-  brandId     Int
-  kind        String    @db.VarChar(30)
-  filename    String    @db.VarChar(200)
-  total       Int
-  inserted    Int       @default(0)
-  skipped     Int       @default(0)
-  userName    String?   @db.VarChar(80)
-  undoneAt    DateTime?
-  createdAt   DateTime  @default(now())
+  id        Int       @id @default(autoincrement())
+  brandId   Int
+  kind      String    @db.VarChar(30)
+  filename  String    @db.VarChar(200)
+  total     Int
+  inserted  Int       @default(0)
+  skipped   Int       @default(0)
+  userName  String?   @db.VarChar(80)
+  undoneAt  DateTime?
+  createdAt DateTime  @default(now())
 
   brand Brand @relation(fields: [brandId], references: [id])
 }
 
 /// Saved column mapping for one platform's export file.
 model ImportTemplate {
-  id         Int      @id @default(autoincrement())
-  name       String   @db.VarChar(120)
-  kind       String   @db.VarChar(30)
-  mapping    Json
-  headerSig  String   @db.VarChar(500)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id        Int      @id @default(autoincrement())
+  name      String   @db.VarChar(120)
+  kind      String   @db.VarChar(30)
+  mapping   Json
+  headerSig String   @db.VarChar(500)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([name, kind])
 }

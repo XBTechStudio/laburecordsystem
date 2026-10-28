@@ -44,7 +44,7 @@ for (const k of [
 ])
   keys.add(k);
 
-const STRINGS = [1, 2, 3, 4, 5, 6, 7, 8].flatMap((n) => JSON.parse(fs.readFileSync(path.join(root, "lib", "i18n", `strings-${n}.json`), "utf8")));
+const STRINGS = [1, 2, 3, 4, 5, 6, 7, 8, 9].flatMap((n) => JSON.parse(fs.readFileSync(path.join(root, "lib", "i18n", `strings-${n}.json`), "utf8")));
 const have = new Set(STRINGS.map((s) => s[0]));
 const list = [...keys].sort((a, b) => a.localeCompare(b));
 const out = process.argv.includes("--all") ? list : list.filter((k) => !have.has(k));

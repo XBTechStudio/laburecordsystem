@@ -84,12 +84,17 @@ export async function saveRules(_p: Result, fd: FormData) {
     const win = int(fd, "promoWindowDays");
     const adj = num(fd, "promoAdjustPercent");
     const tol = num(fd, "reconTolerance");
+    const gap = Math.round(num(fd, "statementMinutes"));
     need(win >= 0, "Promotion window can't be negative.");
+    need(gap >= 1 && gap <= 720, "The statement time window must be between 1 and 720 minutes.");
     need(adj >= 0, "Cost threshold can't be negative.");
     need(tol >= 0, "Tolerance can't be negative.");
     await save("promoWindowDays", win, "promotion effect window");
     await save("promoAdjustPercent", adj, "promotion cost threshold");
     await save("reconTolerance", tol, "reconciliation tolerance");
+    await save("statementMinutes", gap, "statement matching time window");
+    await save("statementMinutes", gap, "statement matching time window");
+    await save("statementMinutes", gap, "statement matching time window");
   });
 }
 

@@ -34,6 +34,8 @@ export type Settings = {
   reconTolerance: number;
   /** Minutes in which staff may still fix their own entries. 0 = only roles with Full access can change or delete data. */
   selfFixMinutes: number;
+  /** A statement line and a recorded transaction with the same amount count as the same when this close in time. */
+  statementMinutes: number;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -60,6 +62,7 @@ export const DEFAULT_SETTINGS: Settings = {
   promoAdjustPercent: 10,
   reconTolerance: 1,
   selfFixMinutes: 0,
+  statementMinutes: 30,
 };
 
 export const getSettings = cache(async (): Promise<Settings> => {

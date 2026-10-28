@@ -55,6 +55,11 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
         </div>
         {canAdd && (
           <div className="flex gap-2">
+            {acc.statementUrl && (
+              <Link href={`/reconcile/statements/${acc.id}`} className="btn">
+                {t("Statement match")}
+              </Link>
+            )}
             <Dialog label={t("Enter balance")} title={t("Real balance of {name}", { name: acc.name })} className="btn btn-primary">
               <BalanceForm acc={{ id: acc.id, name: acc.name, currency: cur }} t={t} today={days.find((d) => d.day === range.to) && range.to === todayStr() ? days.find((d) => d.day === range.to) : undefined} />
             </Dialog>
@@ -125,6 +130,12 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
               </Field>
               <Field label={t("As at")} hint={t("Transactions before this time are not counted. Leave empty to count everything.")}>
                 <input name="openingAt" type="datetime-local" className="input" defaultValue={acc.openingAt ? toLocalInput(acc.openingAt) : ""} />
+              </Field>
+              <Field
+                label={t("Statement page link")}
+                hint={t("Optional. The PG's or agent's own daily statement page. The system reads it every 15 minutes and matches each line with the deposits and withdrawals here.")}
+              >
+                <input name="statementUrl" className="input" inputMode="url" placeholder="https://…" defaultValue={acc.statementUrl ?? ""} />
               </Field>
               <Submit>{t("Save")}</Submit>
             </ActionForm>

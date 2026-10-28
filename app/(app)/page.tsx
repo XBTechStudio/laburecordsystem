@@ -13,6 +13,7 @@ import { queryPlayers } from "@/lib/player-query";
 import { judge, promoStats } from "@/lib/promo-stats";
 import { getScope } from "@/lib/scope";
 import { getSettings } from "@/lib/settings";
+import { accountDays } from "@/lib/statements";
 
 type Alert = { level: "critical" | "serious" | "warning" | "good"; title: string; detail: string; href: string; action: string };
 
@@ -96,6 +97,43 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       href: "/reconcile",
       action: t("Reconcile"),
     });
+  // PG / bank statements: yesterday is complete, so lines still on one side only need a look.
+  const linked = seeBalances ? await prisma.payChannel.findMany({ where: { active: true, statementUrl: { not: null } }, select: { id: true, name: true, statementError: true } }) : [];
+  if (linked.length) {
+    const yesterday = addDays(today, -1);
+    const days = await accountDays(
+      yesterday,
+      linked.map((a) => a.id),
+      settings.statementMinutes,
+    );
+    const unmatched = linked.filter((a) => {
+      const d = days.get(a.id);
+      return d && d.open > 0 && !d.statement?.checkedBy;
+    });
+    if (unmatched.length)
+      alerts.push({
+        level: "critical",
+        title: t("{n} accounts don't match their statement for yesterday", { n: unmatched.length }),
+        detail: unmatched
+          .slice(0, 3)
+          .map((a) => `${a.name}: ${t("{n} lines", { n: days.get(a.id)!.open })}`)
+          .join(" · "),
+        href: `/reconcile/statements?day=${yesterday}`,
+        action: t("Statement match"),
+      });
+    const broken = linked.filter((a) => a.statementError);
+    if (broken.length)
+      alerts.push({
+        level: "warning",
+        title: t("{n} statement links can't be read", { n: broken.length }),
+        detail: broken
+          .slice(0, 3)
+          .map((a) => `${a.name}: ${t(a.statementError!)}`)
+          .join(" · "),
+        href: "/reconcile/statements",
+        action: t("Statement match"),
+      });
+  }
 
   const losers = promoList
     .map((p) => ({ p, j: judge(promos.get(p.id) ?? { claims: 0, claimers: 0, given: 0, dep: 0, depCount: 0, wd: 0, wdCount: 0 }, settings.promoAdjustPercent) }))

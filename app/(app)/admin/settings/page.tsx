@@ -117,6 +117,24 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <Field label={t("Reconciliation tolerance")} hint={t("Balance differences up to this amount count as matched (rounding, small charges).")}>
               <input name="reconTolerance" className="input w-32" inputMode="decimal" defaultValue={s.reconTolerance} disabled={ro} />
             </Field>
+            <Field
+              label={t("Statement match: time window (minutes)")}
+              hint={t("A line on a PG / bank statement and a recorded deposit or withdrawal with exactly the same amount count as the same when their times are this close.")}
+            >
+              <input name="statementMinutes" className="input w-32" inputMode="numeric" defaultValue={s.statementMinutes} disabled={ro} />
+            </Field>
+            <Field
+              label={t("Statement match: time window (minutes)")}
+              hint={t("A line on a PG / bank statement and a recorded deposit or withdrawal with exactly the same amount count as the same when their times are this close.")}
+            >
+              <input name="statementMinutes" className="input w-32" inputMode="numeric" defaultValue={s.statementMinutes} disabled={ro} />
+            </Field>
+            <Field
+              label={t("Statement match: time window (minutes)")}
+              hint={t("A line on a PG / bank statement and a recorded deposit or withdrawal with exactly the same amount count as the same when their times are this close.")}
+            >
+              <input name="statementMinutes" className="input w-32" inputMode="numeric" defaultValue={s.statementMinutes} disabled={ro} />
+            </Field>
             {save()}
           </ActionForm>
         </Card>
