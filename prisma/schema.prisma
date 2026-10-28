@@ -1,0 +1,447 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum TxnType {
+  DEPOSIT
+  WITHDRAW
+}
+
+enum ChannelType {
+  PG
+  BANK
+}
+
+enum CategoryKind {
+  EXPENSE
+  INCOME
+}
+
+enum DividendPeriod {
+  MONTHLY
+  QUARTERLY
+}
+
+// ---------- people & access ----------
+
+/// Roles are defined by the client. `perms` maps a module key to 0 none, 1 view, 2 add, 3 manage.
+model Role {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique @db.VarChar(60)
+  perms     Json
+  locked    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  users User[]
+}
+
+model User {
+  id           Int       @id @default(autoincrement())
+  username     String    @unique @db.VarChar(60)
+  name         String    @db.VarChar(80)
+  passwordHash String    @db.VarChar(200)
+  roleId       Int
+  allBrands    Boolean   @default(false)
+  active       Boolean   @default(true)
+  /// Interface language this person picked: en, zh or id.
+  lang         String?   @db.VarChar(5)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+
+  role     Role         @relation(fields: [roleId], references: [id])
+  brands   UserBrand[]
+  sessions Session[]
+  contacts ContactLog[]
+  assigned Player[]     @relation("AssignedStaff")
+}
+
+model UserBrand {
+  userId  Int
+  brandId Int
+  user    User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brand   Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@id([userId, brandId])
+}
+
+/// id is the SHA-256 of the cookie token, so a leaked database row can't be used to log in.
+model Session {
+  id         String   @id @db.VarChar(64)
+  userId     Int
+  expiresAt  DateTime
+  lastSeenAt DateTime @default(now())
+  ip         String?  @db.VarChar(64)
+  userAgent  String?  @db.VarChar(255)
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ---------- brands & players ----------
+
+model Brand {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique @db.VarChar(80)
+  currency  String   @default("MYR") @db.VarChar(3)
+  /// 1 unit of this brand's currency = fxRate units of the base currency.
+  fxRate    Decimal  @default(1) @db.Decimal(14, 6)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  users       UserBrand[]
+  players     Player[]
+  txns        Txn[]
+  flows       ChannelFlow[]
+  expenses    Expense[]
+  promotions  Promotion[]
+  holdings    Holding[]
+  rule        DividendRule?
+  settlements Settlement[]
+  imports     ImportBatch[]
+  reconNotes  ReconNote[]
+}
+
+model Player {
+  id             Int       @id @default(autoincrement())
+  brandId        Int
+  username       String    @db.VarChar(80)
+  phone          String?   @db.VarChar(40)
+  /// Last 9 digits of the phone: matches "012-345 6789" with "+60 12 345 6789" across brands.
+  phoneKey       String?   @db.VarChar(12)
+  name           String?   @db.VarChar(120)
+  note           String?   @db.VarChar(255)
+  assignedToId   Int?
+  // Lifetime figures, kept up to date whenever transactions change.
+  depositTotal   Decimal   @default(0) @db.Decimal(16, 2)
+  depositCount   Int       @default(0)
+  withdrawTotal  Decimal   @default(0) @db.Decimal(16, 2)
+  withdrawCount  Int       @default(0)
+  firstDepositAt DateTime?
+  lastDepositAt  DateTime?
+  createdAt      DateTime  @default(now())
+  importId       Int?
+
+  brand      Brand        @relation(fields: [brandId], references: [id])
+  assignedTo User?        @relation("AssignedStaff", fields: [assignedToId], references: [id], onDelete: SetNull)
+  txns       Txn[]
+  claims     PromoClaim[]
+  contacts   ContactLog[]
+
+  @@unique([brandId, username])
+  @@index([phoneKey])
+  @@index([brandId, lastDepositAt])
+  @@index([brandId, depositTotal])
+}
+
+// ---------- money in & out ----------
+
+model Txn {
+  id          Int      @id @default(autoincrement())
+  brandId     Int
+  playerId    Int
+  type        TxnType
+  amount      Decimal  @db.Decimal(14, 2)
+  txnAt       DateTime
+  channelId   Int?
+  ref         String?  @db.VarChar(80)
+  note        String?  @db.VarChar(255)
+  createdById Int?
+  importId    Int?
+  createdAt   DateTime @default(now())
+
+  brand   Brand       @relation(fields: [brandId], references: [id])
+  player  Player      @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  channel PayChannel? @relation(fields: [channelId], references: [id], onDelete: SetNull)
+
+  @@unique([brandId, type, ref])
+  @@index([brandId, txnAt])
+  @@index([playerId, txnAt])
+  @@index([importId])
+  @@index([createdById, createdAt])
+}
+
+model PayChannel {
+  id         Int         @id @default(autoincrement())
+  name       String      @unique @db.VarChar(80)
+  type       ChannelType
+  /// Fee charged on money coming in, % of amount plus a fixed amount per transaction.
+  feePercent Decimal     @default(0) @db.Decimal(6, 3)
+  feeFixed   Decimal     @default(0) @db.Decimal(10, 2)
+  active     Boolean     @default(true)
+
+  txns  Txn[]
+  flows ChannelFlow[]
+}
+
+/// What a PG or bank statement says for one brand on one day.
+model ChannelFlow {
+  id          Int      @id @default(autoincrement())
+  brandId     Int
+  channelId   Int
+  date        DateTime @db.Date
+  inAmount    Decimal  @default(0) @db.Decimal(14, 2)
+  inCount     Int      @default(0)
+  outAmount   Decimal  @default(0) @db.Decimal(14, 2)
+  outCount    Int      @default(0)
+  fee         Decimal  @default(0) @db.Decimal(12, 2)
+  note        String?  @db.VarChar(255)
+  createdById Int?
+  importId    Int?
+  createdAt   DateTime @default(now())
+
+  brand   Brand      @relation(fields: [brandId], references: [id])
+  channel PayChannel @relation(fields: [channelId], references: [id])
+
+  @@unique([brandId, channelId, date])
+  @@index([date])
+}
+
+model ReconNote {
+  id        Int      @id @default(autoincrement())
+  brandId   Int
+  date      DateTime @db.Date
+  note      String   @db.VarChar(500)
+  resolved  Boolean  @default(false)
+  userName  String?  @db.VarChar(80)
+  updatedAt DateTime @updatedAt
+
+  brand Brand @relation(fields: [brandId], references: [id])
+
+  @@unique([brandId, date])
+}
+
+model ExpenseCategory {
+  id       Int          @id @default(autoincrement())
+  name     String       @unique @db.VarChar(80)
+  kind     CategoryKind @default(EXPENSE)
+  active   Boolean      @default(true)
+  sort     Int          @default(0)
+  expenses Expense[]
+}
+
+model Expense {
+  id          Int      @id @default(autoincrement())
+  brandId     Int
+  categoryId  Int
+  date        DateTime @db.Date
+  amount      Decimal  @db.Decimal(14, 2)
+  note        String?  @db.VarChar(255)
+  createdById Int?
+  createdAt   DateTime @default(now())
+
+  brand    Brand           @relation(fields: [brandId], references: [id])
+  category ExpenseCategory @relation(fields: [categoryId], references: [id])
+
+  @@index([brandId, date])
+}
+
+// ---------- promotions & CS ----------
+
+model Promotion {
+  id        Int      @id @default(autoincrement())
+  brandId   Int
+  name      String   @db.VarChar(120)
+  note      String?  @db.VarChar(255)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  brand    Brand        @relation(fields: [brandId], references: [id])
+  claims   PromoClaim[]
+  contacts ContactLog[]
+
+  @@unique([brandId, name])
+}
+
+model PromoClaim {
+  id          Int      @id @default(autoincrement())
+  promotionId Int
+  playerId    Int
+  amount      Decimal  @db.Decimal(14, 2)
+  claimedAt   DateTime
+  createdById Int?
+  importId    Int?
+  createdAt   DateTime @default(now())
+
+  promotion Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  player    Player    @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([promotionId, claimedAt])
+  @@index([playerId, claimedAt])
+  @@index([importId])
+}
+
+model ContactLog {
+  id          Int      @id @default(autoincrement())
+  playerId    Int
+  staffId     Int
+  channel     String   @db.VarChar(40)
+  promotionId Int?
+  bonus       Decimal  @default(0) @db.Decimal(12, 2)
+  contactedAt DateTime
+  replied     Boolean  @default(false)
+  result      String?  @db.VarChar(255)
+  createdAt   DateTime @default(now())
+
+  player    Player     @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  staff     User       @relation(fields: [staffId], references: [id])
+  promotion Promotion? @relation(fields: [promotionId], references: [id], onDelete: SetNull)
+
+  @@index([playerId, contactedAt])
+  @@index([staffId, contactedAt])
+}
+
+// ---------- shareholders ----------
+
+model Shareholder {
+  id     Int     @id @default(autoincrement())
+  name   String  @db.VarChar(80)
+  phone  String? @db.VarChar(40)
+  note   String? @db.VarChar(255)
+  active Boolean @default(true)
+
+  holdings Holding[]
+  lines    SettlementLine[]
+}
+
+/// Changing a share closes the old row and opens a new one, so past settlements keep their numbers.
+model Holding {
+  id            Int       @id @default(autoincrement())
+  shareholderId Int
+  brandId       Int
+  percent       Decimal   @db.Decimal(7, 4)
+  effectiveFrom DateTime  @db.Date
+  effectiveTo   DateTime? @db.Date
+  createdAt     DateTime  @default(now())
+
+  shareholder Shareholder @relation(fields: [shareholderId], references: [id], onDelete: Cascade)
+  brand       Brand       @relation(fields: [brandId], references: [id])
+
+  @@index([brandId, effectiveFrom])
+}
+
+model DividendRule {
+  brandId             Int            @id
+  period              DividendPeriod @default(MONTHLY)
+  carryLoss           Boolean        @default(true)
+  /// % of profit kept back before splitting, e.g. company reserve or management fee.
+  reservePercent      Decimal        @default(0) @db.Decimal(6, 3)
+  deductFees          Boolean        @default(true)
+  deductPromos        Boolean        @default(true)
+  /// Expense/income category ids left out of dividend profit.
+  excludedCategoryIds Json?
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+}
+
+model Settlement {
+  id            Int      @id @default(autoincrement())
+  brandId       Int
+  periodStart   DateTime @db.Date
+  periodEnd     DateTime @db.Date
+  profit        Decimal  @db.Decimal(14, 2)
+  carriedIn     Decimal  @default(0) @db.Decimal(14, 2)
+  reserve       Decimal  @default(0) @db.Decimal(14, 2)
+  distributable Decimal  @db.Decimal(14, 2)
+  carryOut      Decimal  @default(0) @db.Decimal(14, 2)
+  /// Snapshot of the numbers and rule used, so later edits can't change an old settlement.
+  breakdown     Json
+  createdBy     String?  @db.VarChar(80)
+  createdAt     DateTime @default(now())
+
+  brand Brand            @relation(fields: [brandId], references: [id])
+  lines SettlementLine[]
+
+  @@unique([brandId, periodStart])
+}
+
+model SettlementLine {
+  id            Int     @id @default(autoincrement())
+  settlementId  Int
+  shareholderId Int
+  percent       Decimal @db.Decimal(7, 4)
+  amount        Decimal @db.Decimal(14, 2)
+  paid          Decimal @default(0) @db.Decimal(14, 2)
+
+  settlement  Settlement      @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+  shareholder Shareholder     @relation(fields: [shareholderId], references: [id])
+  payments    DividendPayment[]
+}
+
+model DividendPayment {
+  id       Int      @id @default(autoincrement())
+  lineId   Int
+  amount   Decimal  @db.Decimal(14, 2)
+  paidAt   DateTime @db.Date
+  note     String?  @db.VarChar(255)
+  userName String?  @db.VarChar(80)
+
+  line SettlementLine @relation(fields: [lineId], references: [id], onDelete: Cascade)
+}
+
+// ---------- tools ----------
+
+model ImportBatch {
+  id          Int       @id @default(autoincrement())
+  brandId     Int
+  kind        String    @db.VarChar(30)
+  filename    String    @db.VarChar(200)
+  total       Int
+  inserted    Int       @default(0)
+  skipped     Int       @default(0)
+  userName    String?   @db.VarChar(80)
+  undoneAt    DateTime?
+  createdAt   DateTime  @default(now())
+
+  brand Brand @relation(fields: [brandId], references: [id])
+}
+
+/// Saved column mapping for one platform's export file.
+model ImportTemplate {
+  id         Int      @id @default(autoincrement())
+  name       String   @db.VarChar(120)
+  kind       String   @db.VarChar(30)
+  mapping    Json
+  headerSig  String   @db.VarChar(500)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([name, kind])
+}
+
+model SavedReport {
+  id        Int      @id @default(autoincrement())
+  name      String   @db.VarChar(120)
+  config    Json
+  ownerId   Int
+  shared    Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model Setting {
+  key   String @id @db.VarChar(60)
+  value Json
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int?
+  userName  String?  @db.VarChar(80)
+  action    String   @db.VarChar(20)
+  entity    String   @db.VarChar(40)
+  entityId  String?  @db.VarChar(40)
+  brandId   Int?
+  summary   String?  @db.VarChar(255)
+  detail    Json?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([entity, entityId])
+  @@index([userId, createdAt])
+}

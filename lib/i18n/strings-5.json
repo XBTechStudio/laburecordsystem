@@ -1,0 +1,7 @@
+[
+["Use only the first word", "只取第一个词", "Pakai kata pertama saja"],
+["Times in this file are UTC (add 8 hours)", "文件里的时间是 UTC（自动加 8 小时）", "Waktu di file ini UTC (tambah 8 jam)"],
+["Only import rows where", "只导入符合条件的行", "Hanya impor baris yang"],
+["— import every row —", "— 导入所有行 —", "— impor semua baris —"],
+["Unticked values are left out, e.g. rejected or pending transactions.", "没勾选的值不会导入，例如被拒或待处理的交易。", "Nilai yang tidak dicentang tidak diimpor, mis. transaksi ditolak atau tertunda."]
+]

@@ -1,0 +1,172 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light;
+  --page: #f4f4f1;
+  --surface: #fcfcfb;
+  --surface-2: #f0efec;
+  --surface-3: #e8e7e2;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --line: rgba(11, 11, 11, 0.1);
+  --line-strong: rgba(11, 11, 11, 0.18);
+  --brand: #1c5cab;
+  --brand-hover: #184f95;
+  --brand-soft: #e6eefa;
+  --brand-ink: #1c5cab;
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --good: #0ca30c;
+  --good-ink: #006300;
+  --good-soft: #e3f4e3;
+  --warning: #fab219;
+  --warning-ink: #7a4f00;
+  --warning-soft: #fdf1d6;
+  --serious: #ec835a;
+  --critical: #d03b3b;
+  --critical-ink: #b02727;
+  --critical-soft: #fbe6e6;
+  --side: #ffffff;
+  --side-ink: #3d3c39;
+  --side-title: #0b0b0b;
+  --side-muted: #898781;
+  --side-hover: #f0efec;
+  --side-active-bg: #e6eefa;
+  --side-active-ink: #1c5cab;
+}
+
+/* Light by default; dark only when the user picks it. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --surface-2: #232321;
+  --surface-3: #2c2c2a;
+  --ink: #f0efec;
+  --ink-2: #c3c2b7;
+  --muted: #898781;
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --line: rgba(255, 255, 255, 0.1);
+  --line-strong: rgba(255, 255, 255, 0.2);
+  --brand: #2a78d6;
+  --brand-hover: #3987e5;
+  --brand-soft: #16304f;
+  --brand-ink: #86b6ef;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --good-ink: #0ca30c;
+  --good-soft: #10291a;
+  --warning-ink: #fab219;
+  --warning-soft: #2e2510;
+  --critical-ink: #e66767;
+  --critical-soft: #331616;
+  --side: #10161f;
+  --side-ink: #c9d1dc;
+  --side-title: #ffffff;
+  --side-muted: #6b7584;
+  --side-hover: rgba(255, 255, 255, 0.05);
+  --side-active-bg: rgba(255, 255, 255, 0.1);
+  --side-active-ink: #ffffff;
+}
+
+@theme inline {
+  --color-page: var(--page);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-brand: var(--brand);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-ink: var(--brand-ink);
+  --color-good: var(--good);
+  --color-good-ink: var(--good-ink);
+  --color-good-soft: var(--good-soft);
+  --color-warning: var(--warning);
+  --color-warning-ink: var(--warning-ink);
+  --color-warning-soft: var(--warning-soft);
+  --color-critical: var(--critical);
+  --color-critical-ink: var(--critical-ink);
+  --color-critical-soft: var(--critical-soft);
+  --font-sans: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+}
+
+body {
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+@layer components {
+  .card {
+    @apply min-w-0 rounded-xl border border-line bg-surface;
+  }
+  .btn {
+    @apply inline-flex h-9 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-line bg-surface px-3 text-sm font-medium whitespace-nowrap text-ink transition-colors hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply border-transparent bg-brand text-white hover:bg-[var(--brand-hover)];
+  }
+  .btn-danger {
+    @apply border-transparent bg-critical text-white hover:opacity-90;
+  }
+  .btn-ghost {
+    @apply border-transparent bg-transparent hover:bg-surface-2;
+  }
+  .btn-sm {
+    @apply h-7 rounded-md px-2 text-xs;
+  }
+  .input {
+    @apply h-9 w-full min-w-0 rounded-lg border border-[var(--line-strong)] bg-surface px-2.5 text-sm text-ink outline-none placeholder:text-muted focus:border-brand focus:ring-2 focus:ring-[var(--brand-soft)] disabled:opacity-60;
+  }
+  textarea.input {
+    @apply h-auto py-2;
+  }
+  .label {
+    @apply mb-1 block text-xs font-medium text-ink-2;
+  }
+  .hint {
+    @apply mt-1 text-xs text-muted;
+  }
+  .link {
+    @apply cursor-pointer text-brand-ink hover:underline;
+  }
+  .tbl {
+    @apply w-full text-sm tabular-nums;
+  }
+  .tbl th {
+    @apply border-b border-line px-3 py-2 text-left text-xs font-medium whitespace-nowrap text-muted;
+  }
+  .tbl td {
+    @apply border-b border-line px-3 py-2 align-middle;
+  }
+  .tbl tr:last-child td {
+    @apply border-b-0;
+  }
+  .tbl tbody tr:hover td {
+    @apply bg-surface-2/50;
+  }
+  .tbl .r {
+    @apply text-right whitespace-nowrap;
+  }
+  .tbl tfoot td {
+    @apply border-t border-b-0 border-line font-semibold;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium whitespace-nowrap;
+  }
+}
