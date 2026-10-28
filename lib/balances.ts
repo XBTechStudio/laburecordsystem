@@ -20,7 +20,7 @@ export async function expectedBalances(at: Date = new Date(), channelIds?: numbe
       SELECT c.id,
         SUM(CASE WHEN t.type = 'DEPOSIT' THEN t.amount ELSE 0 END) AS dep,
         SUM(CASE WHEN t.type = 'WITHDRAW' THEN t.amount ELSE 0 END) AS wd,
-        SUM(CASE WHEN t.type = 'DEPOSIT' THEN t.amount * c.feePercent / 100 + c.feeFixed ELSE 0 END) AS fee
+        SUM(CASE WHEN t.type = 'DEPOSIT' AND c.feeAtSettlement = 0 THEN t.amount * c.feePercent / 100 + c.feeFixed ELSE 0 END) AS fee
       FROM \`PayChannel\` c JOIN \`Txn\` t ON t.channelId = c.id AND t.txnAt >= COALESCE(c.openingAt, ${EPOCH}) AND t.txnAt <= ${at}
       WHERE 1 = 1 ${only}
       GROUP BY c.id`,
@@ -51,7 +51,19 @@ export async function expectedBalances(at: Date = new Date(), channelIds?: numbe
   return out;
 }
 
-export type LedgerDay = { day: string; opening: number; deposits: number; depositCount: number; withdrawals: number; withdrawCount: number; fees: number; moves: number; closing: number };
+export type LedgerDay = {
+  day: string;
+  opening: number;
+  deposits: number;
+  depositCount: number;
+  withdrawals: number;
+  withdrawCount: number;
+  fees: number;
+  moves: number;
+  closing: number;
+  /** closing − opening: the day's net change, what PG pages show as "remaining" for the day. */
+  change: number;
+};
 
 /** One account, day by day (Malaysia days), with running balances. */
 export async function ledger(channelId: number, r: Range): Promise<LedgerDay[]> {
@@ -61,7 +73,7 @@ export async function ledger(channelId: number, r: Range): Promise<LedgerDay[]> 
   const [txns, moves] = await Promise.all([
     prisma.$queryRaw<{ d: string; type: string; amt: unknown; cnt: bigint; fee: unknown }[]>`
       SELECT DATE_FORMAT(DATE_ADD(t.txnAt, INTERVAL 8 HOUR), '%Y-%m-%d') AS d, t.type, SUM(t.amount) AS amt, COUNT(*) AS cnt,
-        SUM(CASE WHEN t.type = 'DEPOSIT' THEN t.amount * c.feePercent / 100 + c.feeFixed ELSE 0 END) AS fee
+        SUM(CASE WHEN t.type = 'DEPOSIT' AND c.feeAtSettlement = 0 THEN t.amount * c.feePercent / 100 + c.feeFixed ELSE 0 END) AS fee
       FROM \`Txn\` t JOIN \`PayChannel\` c ON c.id = t.channelId
       WHERE t.channelId = ${channelId} AND t.txnAt >= ${t0} AND t.txnAt < ${t1} AND t.txnAt >= COALESCE(c.openingAt, ${EPOCH})
       GROUP BY d, t.type`,
@@ -87,8 +99,10 @@ export async function ledger(channelId: number, r: Range): Promise<LedgerDay[]> 
       fees: n(dep?.fee as number),
       moves: n(mv?.amt as number),
       closing: 0,
+      change: 0,
     };
     row.closing = Math.round((row.opening + row.deposits - row.withdrawals - row.fees + row.moves) * 100) / 100;
+    row.change = Math.round((row.closing - row.opening) * 100) / 100;
     running = row.closing;
     days.push(row);
   }

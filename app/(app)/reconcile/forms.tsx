@@ -1,14 +1,25 @@
 import { ActionForm, Submit } from "@/components/client";
 import { Field } from "@/components/ui";
+import { money } from "@/lib/format";
 import type { T } from "@/lib/i18n";
 import { recordBalance, recordMove, recordTransfer, resolveCheck } from "./actions";
 
 type Acc = { id: number; name: string; currency: string };
 
-export function BalanceForm({ acc, t }: { acc: Acc; t: T }) {
+type Today = { deposits: number; depositCount: number; withdrawals: number; withdrawCount: number };
+
+export function BalanceForm({ acc, t, today }: { acc: Acc; t: T; today?: Today }) {
   return (
     <ActionForm action={recordBalance} className="space-y-3">
       <input type="hidden" name="channelId" value={acc.id} />
+      {today && (
+        <div className="rounded-lg bg-surface-2 px-3 py-2 text-xs text-ink-2">
+          <div className="mb-0.5 font-medium text-ink">{t("Recorded in the system today")}</div>
+          {t("In: {amount} ({n} orders)", { amount: money(today.deposits, acc.currency), n: today.depositCount })} ·{" "}
+          {t("Out: {amount} ({n} orders)", { amount: money(today.withdrawals, acc.currency), n: today.withdrawCount })}
+          <div className="mt-0.5 text-muted">{t("Compare with the PG's pay-in / pay-out for today before entering the balance.")}</div>
+        </div>
+      )}
       <Field label={t("Balance shown in the bank / PG now ({cur})", { cur: acc.currency })}>
         <input name="actual" className="input text-lg" inputMode="decimal" required autoFocus placeholder="0.00" />
       </Field>

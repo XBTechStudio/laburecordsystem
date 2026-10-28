@@ -185,6 +185,8 @@ model PayChannel {
   /// Fee charged on money coming in, % of amount plus a fixed amount per deposit.
   feePercent     Decimal     @default(0) @db.Decimal(6, 3)
   feeFixed       Decimal     @default(0) @db.Decimal(10, 2)
+  /// The PG keeps deposits in full and takes its fee when it pays out (settlement), so the balance isn't reduced per deposit.
+  feeAtSettlement Boolean    @default(false)
   openingBalance Decimal     @default(0) @db.Decimal(14, 2)
   /// Balance tracking starts here; null = from the very first transaction.
   openingAt      DateTime?

@@ -1,0 +1,11 @@
+[
+["Change", "当天变动", "Perubahan"],
+["Closing − opening for the day. Compare it with “remaining” on PG pages that only show one day.", "当天期末 − 期初。可以和只显示一天的 PG 页面上的“剩余（Remaining）”对照。", "Penutupan − pembukaan hari itu. Bandingkan dengan “remaining” di halaman PG yang hanya menampilkan satu hari."],
+["Compare with the PG's pay-in / pay-out for today before entering the balance.", "填余额前，先和 PG 后台今天的入款 / 出款对一下。", "Bandingkan dengan pay-in / pay-out PG hari ini sebelum mengisi saldo."],
+["Fee is taken when the PG pays out", "手续费在 PG 结算时才扣", "Biaya dipotong saat PG melakukan pembayaran"],
+["Fees (taken at settlement)", "手续费（结算时扣）", "Biaya (dipotong saat settlement)"],
+["In: {amount} ({n} orders)", "入款：{amount}（{n} 笔）", "Masuk: {amount} ({n} order)"],
+["Out: {amount} ({n} orders)", "出款：{amount}（{n} 笔）", "Keluar: {amount} ({n} order)"],
+["Recorded in the system today", "系统今天记录到的", "Tercatat di sistem hari ini"],
+["Tick this if the PG balance goes up by the full deposit. Record the fee in “Transfer fee” when you record the settlement.", "如果 PG 余额是按入款全额增加的，就勾选这个。记录结算时，把手续费填在“转账手续费”里。", "Centang ini jika saldo PG bertambah sebesar deposit penuh. Catat biayanya di “Biaya transfer” saat mencatat settlement."]
+]

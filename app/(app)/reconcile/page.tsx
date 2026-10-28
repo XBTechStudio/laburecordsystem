@@ -165,13 +165,21 @@ export default async function ReconcilePage() {
                           {c?.resolved && Math.abs(diff) > tol && <div className="mt-0.5 text-xs text-muted">{t("explained")}</div>}
                         </td>
                         <td className="r text-xs whitespace-nowrap">
-                          <div className="text-good-ink">+{money(dep?._sum.amount ?? 0, a.currency)}</div>
-                          <div className="text-ink-2">−{money(wd?._sum.amount ?? 0, a.currency)}</div>
+                          <div className="text-good-ink">
+                            +{money(dep?._sum.amount ?? 0, a.currency)} <span className="text-muted">×{dep?._count ?? 0}</span>
+                          </div>
+                          <div className="text-ink-2">
+                            −{money(wd?._sum.amount ?? 0, a.currency)} <span className="text-muted">×{wd?._count ?? 0}</span>
+                          </div>
                         </td>
                         <td className="r space-x-1 whitespace-nowrap">
                           {canAdd && (
                             <Dialog label={t("Enter balance")} title={t("Real balance of {name}", { name: a.name })} className="btn btn-primary btn-sm">
-                              <BalanceForm acc={{ id: a.id, name: a.name, currency: a.currency }} t={t} />
+                              <BalanceForm
+                                acc={{ id: a.id, name: a.name, currency: a.currency }}
+                                t={t}
+                                today={{ deposits: n(dep?._sum.amount), depositCount: dep?._count ?? 0, withdrawals: n(wd?._sum.amount), withdrawCount: wd?._count ?? 0 }}
+                              />
                             </Dialog>
                           )}
                           <Link href={`/reconcile/${a.id}`} className="btn btn-sm">

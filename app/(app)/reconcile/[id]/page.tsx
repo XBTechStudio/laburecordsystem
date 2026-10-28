@@ -5,7 +5,7 @@ import { RangeBar } from "@/components/range";
 import { Card, Field, Info, TableWrap } from "@/components/ui";
 import { can, requirePage } from "@/lib/auth";
 import { expectedBalances, ledger } from "@/lib/balances";
-import { parseRange, toLocalInput } from "@/lib/dates";
+import { parseRange, todayStr, toLocalInput } from "@/lib/dates";
 import { prisma } from "@/lib/db";
 import { count, dt, money, n } from "@/lib/format";
 import { getT } from "@/lib/i18n-server";
@@ -56,7 +56,7 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
         {canAdd && (
           <div className="flex gap-2">
             <Dialog label={t("Enter balance")} title={t("Real balance of {name}", { name: acc.name })} className="btn btn-primary">
-              <BalanceForm acc={{ id: acc.id, name: acc.name, currency: cur }} t={t} />
+              <BalanceForm acc={{ id: acc.id, name: acc.name, currency: cur }} t={t} today={days.find((d) => d.day === range.to) && range.to === todayStr() ? days.find((d) => d.day === range.to) : undefined} />
             </Dialog>
             <Dialog label={"+ " + t("Other movement")} title={t("Money in or out of an account")}>
               <MoveForm accounts={accounts} t={t} allowAdjust={full} channelId={acc.id} />
@@ -75,7 +75,7 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
               [t("Starting balance"), now?.opening ?? 0, ""],
               [t("Deposits received"), now?.deposits ?? 0, "+"],
               [t("Withdrawals paid"), -(now?.withdrawals ?? 0), "−"],
-              [t("Fees (fee rate × deposits)"), -(now?.fees ?? 0), "−"],
+              [acc.feeAtSettlement ? t("Fees (taken at settlement)") : t("Fees (fee rate × deposits)"), -(now?.fees ?? 0), "−"],
               [t("Transfers and other movements"), now?.moves ?? 0, "±"],
             ].map(([l, v, s]) => (
               <div key={String(l)} className="flex justify-between border-b border-line pb-1.5">
@@ -113,6 +113,13 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
                   <input name="feeFixed" className="input" inputMode="decimal" defaultValue={n(acc.feeFixed)} />
                 </Field>
               </div>
+              <label className="flex items-start gap-2 text-sm">
+                <input type="checkbox" name="feeAtSettlement" defaultChecked={acc.feeAtSettlement} className="mt-0.5 h-4 w-4 accent-[var(--brand)]" />
+                <span>
+                  {t("Fee is taken when the PG pays out")}
+                  <span className="block text-xs text-muted">{t("Tick this if the PG balance goes up by the full deposit. Record the fee in “Transfer fee” when you record the settlement.")}</span>
+                </span>
+              </label>
               <Field label={t("Starting balance ({cur})", { cur })}>
                 <input name="openingBalance" className="input" inputMode="decimal" defaultValue={n(acc.openingBalance)} />
               </Field>
@@ -142,6 +149,9 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
                 <th className="r">{t("Fees")}</th>
                 <th className="r">{t("Moves")}</th>
                 <th className="r">{t("Closing")}</th>
+                <th className="r">
+                  {t("Change")} <Info>{t("Closing − opening for the day. Compare it with “remaining” on PG pages that only show one day.")}</Info>
+                </th>
                 <th className="r">{t("Real balance")}</th>
               </tr>
             </thead>
@@ -164,6 +174,9 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
                     <td className="r text-ink-2">{d.fees ? `−${money(d.fees, cur)}` : "–"}</td>
                     <td className={`r ${d.moves < 0 ? "text-critical-ink" : d.moves > 0 ? "text-good-ink" : "text-muted"}`}>{d.moves ? money(d.moves, cur) : "–"}</td>
                     <td className="r font-medium">{money(d.closing, cur)}</td>
+                    <td className={`r ${d.change < 0 ? "text-critical-ink" : d.change > 0 ? "text-good-ink" : "text-muted"}`}>
+                      {d.change ? `${d.change > 0 ? "+" : ""}${money(d.change, cur)}` : "–"}
+                    </td>
                     <td className="r">
                       {c ? (
                         <>

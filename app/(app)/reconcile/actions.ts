@@ -125,7 +125,7 @@ export async function setOpening(_p: Result, fd: FormData) {
     const before = await prisma.payChannel.findUniqueOrThrow({ where: { id } });
     await prisma.payChannel.update({
       where: { id },
-      data: { openingBalance: bal, openingAt: at, feePercent, feeFixed, currency, type: str(fd, "type") === "PG" ? "PG" : "BANK" },
+      data: { openingBalance: bal, openingAt: at, feePercent, feeFixed, currency, type: str(fd, "type") === "PG" ? "PG" : "BANK", feeAtSettlement: fd.get("feeAtSettlement") === "on" },
     });
     await audit(user, "UPDATE", "PayChannel", id, null, `Starting balance of ${before.name} set to ${bal}`, {
       before: { openingBalance: before.openingBalance, openingAt: before.openingAt },
