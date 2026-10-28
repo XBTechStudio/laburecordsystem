@@ -6,6 +6,7 @@ import { Card, Chip, Empty, Field, Info, PageHeader, Pager, TableWrap, Tabs } fr
 import { can, requirePage } from "@/lib/auth";
 import { addDays, allDaysOf, dayStart, instantRange, parseRange } from "@/lib/dates";
 import { prisma } from "@/lib/db";
+import { editRights } from "@/lib/edit-rights";
 import { count, dt, money, money0, n, pct, ratio } from "@/lib/format";
 import { getScope } from "@/lib/scope";
 import { getSettings } from "@/lib/settings";
@@ -23,7 +24,7 @@ export default async function CsPage({ searchParams }: { searchParams: Promise<R
   const sp = await searchParams;
   const tab = sp.tab === "log" ? "log" : "performance";
   const range = parseRange(sp, "month");
-  const [scope, settings, t] = await Promise.all([getScope(user), getSettings(), getT()]);
+  const [scope, settings, t, rights] = await Promise.all([getScope(user), getSettings(), getT(), editRights(user, "cs")]);
   const canLog = can(user, "cs", 2);
 
   return (
@@ -97,7 +98,7 @@ export default async function CsPage({ searchParams }: { searchParams: Promise<R
       {tab === "performance" ? (
         <Performance brandIds={scope.brandIds} range={range} recallDays={settings.recallDays} rate={scope.rate} currency={scope.currency} t={t} />
       ) : (
-        <Log sp={sp} brandIds={scope.brandIds} range={range} userId={user.id} full={can(user, "cs", 3)} brandCurrency={scope.brandCurrency} t={t} />
+        <Log sp={sp} brandIds={scope.brandIds} range={range} may={rights.may} note={rights.note} brandCurrency={scope.brandCurrency} t={t} />
       )}
     </div>
   );
@@ -249,16 +250,16 @@ async function Log({
   sp,
   brandIds,
   range,
-  userId,
-  full,
+  may,
+  note,
   brandCurrency,
   t,
 }: {
   sp: Record<string, string | undefined>;
   brandIds: number[];
   range: { from: string; to: string };
-  userId: number;
-  full: boolean;
+  may: (authorId: number | null, createdAt: Date) => boolean;
+  note: string;
   brandCurrency: (id: number) => string;
   t: T;
 }) {
@@ -279,6 +280,7 @@ async function Log({
     <Card
       flush
       title={t("{n} contacts", { n: count(total) })}
+      note={note || undefined}
       action={
         <form action="/cs" className="flex gap-2">
           <input type="hidden" name="tab" value="log" />
@@ -337,7 +339,7 @@ async function Log({
                   <td>{c.replied ? <Chip tone="good">{t("Replied")}</Chip> : <Chip>{t("No reply")}</Chip>}</td>
                   <td className="max-w-64 truncate text-ink-2">{c.result ?? ""}</td>
                   <td className="r">
-                    {(full || c.staffId === userId) && (
+                    {may(c.staffId, c.createdAt) && (
                       <ActionButton action={deleteContact} fields={{ id: c.id }} question={t("Delete this contact record?")}>
                         {t("Delete")}
                       </ActionButton>

@@ -2,11 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import type { TxnType } from "@prisma/client";
-import { assertBrand, can, Denied, guard } from "@/lib/auth";
+import { assertBrand, Denied, guard } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { amount, int, need, run, str, UserError, type Result } from "@/lib/action";
 import { dateOnly, fromLocalInput, todayStr } from "@/lib/dates";
 import { prisma } from "@/lib/db";
+import { editRights } from "@/lib/edit-rights";
 import { phoneKey } from "@/lib/format";
 import { getT } from "@/lib/i18n-server";
 import { ensurePlayers, refreshPlayerStats } from "@/lib/players";
@@ -223,15 +224,13 @@ export async function saveBatch(kind: string, brandId: number, rows: Row[], defa
 
 // ---- edit & delete single entries ----
 
-const ONE_HOUR = 3600_000;
-
-/** Full access may change anything; others only their own entries from the last hour (to fix a typo). */
+/** Full access may change anything; others only their own entries, and only if Settings give them a few minutes to fix typos. */
 async function mayChange(createdById: number | null, createdAt: Date, brandId: number, kind = "entry") {
   const m = moduleFor(kind);
   const user = await guard(m, 2);
   assertBrand(user, brandId);
-  const own = createdById === user.id && Date.now() - createdAt.getTime() < ONE_HOUR;
-  if (!can(user, m, 3) && !own) throw new Denied("Only a supervisor can change this. You can fix your own entries within an hour of saving them.");
+  const rights = await editRights(user, m);
+  if (!rights.may(createdById, createdAt)) throw new Denied(rights.denied);
   return user;
 }
 
@@ -265,6 +264,7 @@ export async function deleteEntry(_p: Result, fd: FormData) {
     }
     revalidatePath("/entry");
     revalidatePath("/expenses");
+    revalidatePath("/transactions");
     return "Deleted.";
   });
 }
@@ -315,6 +315,7 @@ export async function updateEntry(_p: Result, fd: FormData) {
     }
     revalidatePath("/entry");
     revalidatePath("/expenses");
+    revalidatePath("/transactions");
     return "Saved.";
   });
 }

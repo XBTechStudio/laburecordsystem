@@ -32,6 +32,8 @@ export type Settings = {
   promoAdjustPercent: number;
   /** Reconciliation differences at or below this amount count as matched. */
   reconTolerance: number;
+  /** Minutes in which staff may still fix their own entries. 0 = only roles with Full access can change or delete data. */
+  selfFixMinutes: number;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -57,6 +59,7 @@ export const DEFAULT_SETTINGS: Settings = {
   promoWindowDays: 7,
   promoAdjustPercent: 10,
   reconTolerance: 1,
+  selfFixMinutes: 0,
 };
 
 export const getSettings = cache(async (): Promise<Settings> => {

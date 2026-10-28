@@ -6,6 +6,7 @@ import { audit } from "@/lib/audit";
 import { amount, int, need, run, str, type Result } from "@/lib/action";
 import { fromLocalInput } from "@/lib/dates";
 import { prisma } from "@/lib/db";
+import { editRights } from "@/lib/edit-rights";
 import { getSettings } from "@/lib/settings";
 import { getT } from "@/lib/i18n-server";
 
@@ -82,7 +83,8 @@ export async function deleteContact(_p: Result, fd: FormData) {
     const id = int(fd, "id");
     const c = await prisma.contactLog.findUniqueOrThrow({ where: { id }, include: { player: true } });
     assertBrand(user, c.player.brandId);
-    need(can(user, "cs", 3) || (c.staffId === user.id && Date.now() - c.createdAt.getTime() < 3600_000), "Only a supervisor can delete this.");
+    const rights = await editRights(user, "cs");
+    if (!rights.may(c.staffId, c.createdAt)) throw new Denied(rights.denied);
     await prisma.contactLog.delete({ where: { id } });
     await audit(user, "DELETE", "ContactLog", id, c.player.brandId, `Deleted contact with ${c.player.username}`, c);
     revalidate();

@@ -25,6 +25,9 @@ export async function saveGeneral(_p: Result, fd: FormData) {
     need(/^[A-Z]{3}$/.test(cur), "Base currency should be a 3-letter code like MYR.");
     await save("systemName", name, "system name");
     await save("baseCurrency", cur, "base currency");
+    const fix = Math.round(num(fd, "selfFixMinutes") || 0);
+    need(fix >= 0 && fix <= 1440, "Minutes must be between 0 and 1440.");
+    await save("selfFixMinutes", fix, "self-fix window");
     await save(
       "profit",
       { fees: fd.get("fees") === "on", promos: fd.get("promos") === "on", expenses: fd.get("expenses") === "on", income: fd.get("income") === "on" },

@@ -1,16 +1,18 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { BatchEntry, type Col } from "@/components/batch-entry";
-import { ActionButton, ActionForm, AutoSelect, Dialog, Submit } from "@/components/client";
+import { AutoSelect } from "@/components/client";
 import { Card, Chip, Empty, Field, PageHeader, TableWrap, Tabs } from "@/components/ui";
-import { can, requirePage, type CurrentUser } from "@/lib/auth";
+import { requirePage, type CurrentUser } from "@/lib/auth";
 import { dayStart, addDays, toLocalInput, todayStr } from "@/lib/dates";
 import { prisma } from "@/lib/db";
+import { editRights } from "@/lib/edit-rights";
 import { dt, money, n } from "@/lib/format";
 import { tk, type T } from "@/lib/i18n";
 import { getT } from "@/lib/i18n-server";
 import { getScope } from "@/lib/scope";
-import { deleteEntry, loadLists, saveBatch, updateEntry } from "./actions";
+import { loadLists, saveBatch } from "./actions";
+import { EditCell, TxnFields } from "./edit-cell";
 
 const KINDS = [
   { key: "txn", label: tk("Deposits & withdrawals") },
@@ -108,11 +110,6 @@ export default async function EntryPage({ searchParams }: { searchParams: Promis
   );
 }
 
-/** Entries newer than this can still be fixed by the person who made them. */
-function anHourAgo() {
-  return Date.now() - 3600_000;
-}
-
 function Shell({ kind, children, t }: { kind: Kind; children: ReactNode; t: T }) {
   return (
     <div className="max-w-6xl space-y-5">
@@ -152,34 +149,20 @@ async function Recent({
   brandName: (id: number) => string;
   multi: boolean;
 }) {
-  const t = await getT();
-  const full = can(user, "entry", 3);
+  const [t, rights] = await Promise.all([getT(), editRights(user, "entry")]);
+  const full = rights.full;
   const who = full && sp.who === "all" ? "all" : "me";
   const day = /^\d{4}-\d{2}-\d{2}$/.test(sp.day ?? "") ? sp.day! : todayStr();
   const created = { gte: dayStart(day), lt: dayStart(addDays(day, 1)) };
   const mine = who === "me" ? { createdById: user.id } : {};
-  const recentHour = anHourAgo();
-  const canChange = (createdById: number | null, createdAt: Date) => full || (createdById === user.id && createdAt.getTime() > recentHour);
-  const actions = (id: number, allowed: boolean, form: ReactNode, label: string) =>
-    allowed ? (
-      <td className="r space-x-1">
-        <Dialog label={t("Edit")} title={t("Edit {name}", { name: label })}>
-          <ActionForm action={updateEntry} close className="space-y-3">
-            <input type="hidden" name="kind" value={kind} />
-            <input type="hidden" name="id" value={id} />
-            {form}
-            <div className="flex justify-end">
-              <Submit>{t("Save")}</Submit>
-            </div>
-          </ActionForm>
-        </Dialog>
-        <ActionButton action={deleteEntry} fields={{ kind, id }} question={t("Delete this {name}? This can't be undone.", { name: label })}>
-          {t("Delete")}
-        </ActionButton>
-      </td>
-    ) : (
-      <td />
-    );
+  const canChange = rights.may;
+  // Only worth a column when the list shows everyone's entries.
+  const everyone = who === "all";
+  const actions = (id: number, allowed: boolean, form: ReactNode, label: string) => (
+    <EditCell kind={kind} id={id} label={label} allowed={allowed} t={t}>
+      {form}
+    </EditCell>
+  );
 
   let table: ReactNode = null;
   let total = 0;
@@ -187,7 +170,7 @@ async function Recent({
   if (kind === "txn") {
     const rows = await prisma.txn.findMany({
       where: { brandId: { in: brandIds }, createdAt: created, ...mine },
-      include: { player: true, channel: true },
+      include: { player: true, channel: true, createdBy: { select: { name: true } } },
       orderBy: { id: "desc" },
       take: 200,
     });
@@ -204,6 +187,7 @@ async function Recent({
             <th>{t("PG / bank")}</th>
             <th>{t("Ref")}</th>
             <th>{t("Note")}</th>
+            {everyone && <th>{t("Entered by")}</th>}
             <th />
           </tr>
         </thead>
@@ -222,41 +206,11 @@ async function Recent({
               <td className="text-ink-2">{tx.channel?.name ?? "–"}</td>
               <td className="text-ink-2">{tx.ref ?? "–"}</td>
               <td className="max-w-48 truncate text-ink-2">{tx.note ?? ""}</td>
+              {everyone && <td className="whitespace-nowrap text-ink-2">{tx.createdBy?.name ?? "–"}</td>}
               {actions(
                 tx.id,
                 canChange(tx.createdById, tx.createdAt),
-                <>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Field label={t("Type")}>
-                      <select name="type" className="input" defaultValue={tx.type}>
-                        <option value="DEPOSIT">{t("Deposit")}</option>
-                        <option value="WITHDRAW">{t("Withdrawal")}</option>
-                      </select>
-                    </Field>
-                    <Field label={t("Amount")}>
-                      <input name="amount" className="input" defaultValue={n(tx.amount)} inputMode="decimal" required />
-                    </Field>
-                    <Field label={t("Date & time")}>
-                      <input name="time" type="datetime-local" className="input" defaultValue={toLocalInput(tx.txnAt)} />
-                    </Field>
-                    <Field label={t("PG / bank")}>
-                      <select name="channel" className="input" defaultValue={tx.channelId ?? ""}>
-                        <option value="">–</option>
-                        {channels.map((c) => (
-                          <option key={c.value} value={c.value}>
-                            {c.label}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-                    <Field label={t("Reference no.")}>
-                      <input name="ref" className="input" defaultValue={tx.ref ?? ""} />
-                    </Field>
-                    <Field label={t("Note")}>
-                      <input name="note" className="input" defaultValue={tx.note ?? ""} />
-                    </Field>
-                  </div>
-                </>,
+                <TxnFields tx={tx} channels={channels} t={t} />,
                 t("transaction"),
               )}
             </tr>
@@ -267,7 +221,7 @@ async function Recent({
   } else if (kind === "claim") {
     const rows = await prisma.promoClaim.findMany({
       where: { promotion: { brandId: { in: brandIds } }, createdAt: created, ...mine },
-      include: { player: true, promotion: true },
+      include: { player: true, promotion: true, createdBy: { select: { name: true } } },
       orderBy: { id: "desc" },
       take: 200,
     });
@@ -281,6 +235,7 @@ async function Recent({
             <th>{t("Promotion")}</th>
             <th className="r">{t("Bonus")}</th>
             <th>{t("Time")}</th>
+            {everyone && <th>{t("Entered by")}</th>}
             <th />
           </tr>
         </thead>
@@ -292,6 +247,7 @@ async function Recent({
               <td>{c.promotion.name}</td>
               <td className="r">{money(c.amount, brandCurrency(c.promotion.brandId))}</td>
               <td className="whitespace-nowrap text-ink-2">{dt(c.claimedAt)}</td>
+              {everyone && <td className="whitespace-nowrap text-ink-2">{c.createdBy?.name ?? "–"}</td>}
               {actions(
                 c.id,
                 canChange(c.createdById, c.createdAt),
@@ -368,7 +324,7 @@ async function Recent({
     <Card
       flush
       title={day === todayStr() ? t("Entered today") : t("Entered on {day}", { day })}
-      note={`${total}${total === 200 ? "+" : ""} · ${who === "me" ? t("by you") : t("by everyone")}${full ? "" : " · " + t("you can fix your own entries for an hour after saving")}`}
+      note={`${total}${total === 200 ? "+" : ""} · ${who === "me" ? t("by you") : t("by everyone")}${rights.note ? " · " + rights.note : ""}`}
       action={
         <form action="/entry" className="flex items-center gap-2">
           <input type="hidden" name="kind" value={kind} />

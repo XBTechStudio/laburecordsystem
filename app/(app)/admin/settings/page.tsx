@@ -55,6 +55,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 <input name="baseCurrency" className="input uppercase" defaultValue={s.baseCurrency} maxLength={3} disabled={ro} />
               </Field>
             </div>
+            <Field
+              label={t("Staff may fix their own entries for (minutes)")}
+              hint={t("0 = never: only roles with Full access (by default the Administrator) can change or delete saved data. Every change is kept in the audit log.")}
+            >
+              <input name="selfFixMinutes" className="input w-32" inputMode="numeric" defaultValue={s.selfFixMinutes} disabled={ro} />
+            </Field>
             <fieldset className="space-y-2.5">
               <legend className="label">{t("Net profit = Win/Loss …")}</legend>
               <Check name="fees" label={"− " + t("PG and bank fees")} hint={t("Worked out from each PG/bank's fee rate on deposits")} on={s.profit.fees} disabled={ro} />

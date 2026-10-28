@@ -68,6 +68,10 @@ model User {
   sessions Session[]
   contacts ContactLog[]
   assigned Player[]     @relation("AssignedStaff")
+
+  txnsEntered     Txn[]        @relation("TxnEnteredBy")
+  claimsEntered   PromoClaim[] @relation("ClaimEnteredBy")
+  expensesEntered Expense[]    @relation("ExpenseEnteredBy")
 }
 
 model UserBrand {
@@ -164,9 +168,10 @@ model Txn {
   importId    Int?
   createdAt   DateTime @default(now())
 
-  brand   Brand       @relation(fields: [brandId], references: [id])
-  player  Player      @relation(fields: [playerId], references: [id], onDelete: Cascade)
-  channel PayChannel? @relation(fields: [channelId], references: [id], onDelete: SetNull)
+  brand     Brand       @relation(fields: [brandId], references: [id])
+  player    Player      @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  channel   PayChannel? @relation(fields: [channelId], references: [id], onDelete: SetNull)
+  createdBy User?       @relation("TxnEnteredBy", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@unique([brandId, type, ref])
   @@index([brandId, txnAt])
@@ -254,8 +259,9 @@ model Expense {
   createdById Int?
   createdAt   DateTime @default(now())
 
-  brand    Brand           @relation(fields: [brandId], references: [id])
-  category ExpenseCategory @relation(fields: [categoryId], references: [id])
+  brand     Brand           @relation(fields: [brandId], references: [id])
+  category  ExpenseCategory @relation(fields: [categoryId], references: [id])
+  createdBy User?           @relation("ExpenseEnteredBy", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([brandId, date])
 }
@@ -289,6 +295,7 @@ model PromoClaim {
 
   promotion Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
   player    Player    @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  createdBy User?     @relation("ClaimEnteredBy", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([promotionId, claimedAt])
   @@index([playerId, claimedAt])

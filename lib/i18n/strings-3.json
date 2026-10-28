@@ -103,8 +103,6 @@
 ["One per line. CS pick from this list when they log a contact.","每行一个。客服记录联系时从这里选。","Satu per baris. CS memilih dari daftar ini saat mencatat kontak."],
 ["One row per PG/bank per day, as shown on the statement. Leave Fee empty to calculate it from the channel's fee rate. Entering the same day again replaces it.","每个 PG/银行每天一行，照流水上的数字填。手续费留空会按通道费率自动算。同一天再录一次会覆盖。","Satu baris per PG/bank per hari, sesuai laporan. Kosongkan Biaya agar dihitung dari tarif saluran. Input hari yang sama lagi akan menggantikannya."],
 ["Only {amount} is still unpaid to {name}.","{name} 只剩 {amount} 未付。","Hanya {amount} yang belum dibayar ke {name}."],
-["Only a supervisor can change this. You can fix your own entries within an hour of saving them.","只有主管能修改。你可以在保存后一小时内修改自己的记录。","Hanya supervisor yang bisa mengubah ini. Anda bisa memperbaiki entri sendiri dalam satu jam setelah disimpan."],
-["Only a supervisor can delete this.","只有主管能删除。","Hanya supervisor yang bisa menghapus ini."],
 ["Only a supervisor can reassign players.","只有主管能重新分配玩家。","Hanya supervisor yang bisa memindahkan pemain."],
 ["Only days that need checking","只看需要核查的日子","Hanya hari yang perlu dicek"],
 ["only me","仅自己","hanya saya"],

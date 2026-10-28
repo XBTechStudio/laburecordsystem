@@ -2,6 +2,7 @@
 // Safe to run again — it only adds what's missing.
 //
 //   npm run db:seed
+//   npm run db:seed -- --reset-roles   (also puts the built-in roles back to their default permissions)
 //
 // The administrator signs in with username "admin". The first password comes from ADMIN_PASSWORD
 // in .env; without it a random one is generated and printed once. Change it under "My account".
@@ -25,7 +26,7 @@ async function main() {
     await prisma.role.upsert({
       where: { name: r.name },
       create: { name: r.name, perms: r.perms, locked: !!r.locked },
-      update: r.locked ? { perms: r.perms, locked: true } : {},
+      update: r.locked || process.argv.includes("--reset-roles") ? { perms: r.perms, locked: !!r.locked } : {},
     });
   }
   const adminRole = await prisma.role.findUniqueOrThrow({ where: { name: "Administrator" } });

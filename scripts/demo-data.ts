@@ -146,6 +146,22 @@ async function main() {
     SET p.depositTotal = COALESCE(s.dt, 0), p.depositCount = COALESCE(s.dc, 0), p.withdrawTotal = COALESCE(s.wt, 0),
         p.withdrawCount = COALESCE(s.wc, 0), p.firstDepositAt = s.fd, p.lastDepositAt = s.ld`);
 
+  // Who typed each record in (Siti and Aina for Brand A, Aina and the admin for the others), a few minutes after it happened.
+  const admin = await prisma.user.findFirstOrThrow({ where: { role: { name: "Administrator" } }, orderBy: { id: "asc" } });
+  const by = (id: string, brand: string) =>
+    `IF(${brand} = ${brands[0].id}, IF(${id} % 10 < 7, ${staff.siti.id}, ${staff.aina.id}), IF(${id} % 4 < 3, ${staff.aina.id}, ${admin.id}))`;
+  const ids = brands.map((b) => b.id).join(",");
+  await prisma.$executeRawUnsafe(
+    `UPDATE \`Txn\` SET createdById = ${by("id", "brandId")}, createdAt = LEAST(UTC_TIMESTAMP(), txnAt + INTERVAL (3 + id * 37 % 88) MINUTE) WHERE brandId IN (${ids})`,
+  );
+  await prisma.$executeRawUnsafe(
+    `UPDATE \`PromoClaim\` c JOIN \`Promotion\` p ON p.id = c.promotionId
+     SET c.createdById = ${by("c.id", "p.brandId")}, c.createdAt = LEAST(UTC_TIMESTAMP(), c.claimedAt + INTERVAL (3 + c.id * 37 % 88) MINUTE) WHERE p.brandId IN (${ids})`,
+  );
+  await prisma.$executeRawUnsafe(
+    `UPDATE \`Expense\` SET createdById = IF(id % 2 = 0, ${staff.aina.id}, ${admin.id}), createdAt = LEAST(UTC_TIMESTAMP(), date + INTERVAL (120 + id * 13 % 300) MINUTE) WHERE brandId IN (${ids})`,
+  );
+
   // CS follow-ups on players who went quiet, some of whom came back.
   const quiet = await prisma.player.findMany({ where: { lastDepositAt: { lt: at(7) }, depositCount: { gt: 2 } }, orderBy: { depositTotal: "desc" }, take: 120 });
   const cs = [staff.mei, staff.jason];

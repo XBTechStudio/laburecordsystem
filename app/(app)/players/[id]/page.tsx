@@ -5,7 +5,9 @@ import { ContactForm } from "@/components/contact-form";
 import { TierChip } from "@/components/tier";
 import { Card, Chip, Empty, Field, Info, TableWrap } from "@/components/ui";
 import { can, canSeeBrand, requirePage } from "@/lib/auth";
+import { dayOf, todayStr } from "@/lib/dates";
 import { prisma } from "@/lib/db";
+import { editRights } from "@/lib/edit-rights";
 import { ago, d10, dt, money, money0, n } from "@/lib/format";
 import { getSettings, scorePlayer } from "@/lib/settings";
 import { assignPlayer, deleteContact } from "../../cs/actions";
@@ -22,7 +24,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
   const player = Number.isInteger(id) ? await prisma.player.findUnique({ where: { id }, include: { brand: true, assignedTo: true } }) : null;
   if (!player || !canSeeBrand(user, player.brandId)) notFound();
 
-  const [settings, t] = await Promise.all([getSettings(), getT()]);
+  const [settings, t, csRights] = await Promise.all([getSettings(), getT(), editRights(user, "cs")]);
   const cur = player.brand.currency;
   const dep = n(player.depositTotal);
   const wd = n(player.withdrawTotal);
@@ -31,8 +33,8 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
   const canEdit = can(user, "players", 3);
   const canLog = can(user, "cs", 2) || can(user, "churn", 2);
 
-  const [txns, claims, contacts, twins, months, promos, staff] = await Promise.all([
-    prisma.txn.findMany({ where: { playerId: id }, include: { channel: true }, orderBy: { txnAt: "desc" }, take: 50 }),
+  const [txns, claims, contacts, twins, months, promos, staff, firstTxn] = await Promise.all([
+    prisma.txn.findMany({ where: { playerId: id }, include: { channel: true, createdBy: { select: { name: true } } }, orderBy: { txnAt: "desc" }, take: 50 }),
     prisma.promoClaim.findMany({ where: { playerId: id }, include: { promotion: true }, orderBy: { claimedAt: "desc" }, take: 20 }),
     prisma.contactLog.findMany({ where: { playerId: id }, include: { staff: true, promotion: true }, orderBy: { contactedAt: "desc" }, take: 30 }),
     player.phoneKey
@@ -43,6 +45,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
       FROM \`Txn\` WHERE playerId = ${id} AND txnAt >= DATE_SUB(NOW(), INTERVAL 12 MONTH) GROUP BY m, type ORDER BY m`,
     prisma.promotion.findMany({ where: { brandId: player.brandId, active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
     can(user, "churn", 3) || canEdit ? prisma.user.findMany({ where: { active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }) : Promise.resolve([]),
+    prisma.txn.findFirst({ where: { playerId: id }, orderBy: { txnAt: "asc" }, select: { txnAt: true } }),
   ]);
   const visibleTwins = twins.filter((t) => canSeeBrand(user, t.brandId));
   const since = daysAgo(settings.recallDays);
@@ -281,7 +284,19 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
       </Card>
 
       <div className="grid gap-5 lg:grid-cols-2">
-        <Card flush title={t("Transactions")} note={t("Latest 50")}>
+        <Card
+          flush
+          title={t("Transactions")}
+          note={t("Latest 50")}
+          action={
+            firstTxn &&
+            can(user, "transactions") && (
+              <Link className="btn btn-sm" href={`/transactions?${new URLSearchParams({ player: String(id), from: dayOf(firstTxn.txnAt), to: todayStr() })}`}>
+                {t("See all")} →
+              </Link>
+            )
+          }
+        >
           {txns.length === 0 ? (
             <Empty title={t("No transactions")} />
           ) : (
@@ -293,6 +308,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
                     <th>{t("Type")}</th>
                     <th className="r">{t("Amount")}</th>
                     <th>{t("PG / bank")}</th>
+                    <th>{t("Entered by")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -302,6 +318,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
                       <td>{tx.type === "DEPOSIT" ? <Chip tone="good">{t("Deposit")}</Chip> : <Chip tone="warning">{t("Withdrawal")}</Chip>}</td>
                       <td className="r">{money(tx.amount, cur)}</td>
                       <td className="text-ink-2">{tx.channel?.name ?? "–"}</td>
+                      <td className="whitespace-nowrap text-ink-2">{tx.createdBy?.name ?? "–"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -329,7 +346,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
                       </div>
                       {c.result && <div className="mt-0.5 text-ink-2">{c.result}</div>}
                     </div>
-                    {(can(user, "cs", 3) || c.staffId === user.id) && (
+                    {csRights.may(c.staffId, c.createdAt) && (
                       <ActionButton action={deleteContact} fields={{ id: c.id }} question={t("Delete this contact record?")} className="btn btn-ghost btn-sm text-muted">
                         ✕
                       </ActionButton>

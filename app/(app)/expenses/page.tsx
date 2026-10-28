@@ -6,6 +6,7 @@ import { Card, Chip, Empty, Field, Info, PageHeader, TableWrap, Tabs } from "@/c
 import { can, requirePage } from "@/lib/auth";
 import { dateOnly, dateRange, parseRange } from "@/lib/dates";
 import { prisma } from "@/lib/db";
+import { editRights } from "@/lib/edit-rights";
 import { d10, dt, money, money0, n, pct } from "@/lib/format";
 import { converted, dailyRows, groupBy, sum } from "@/lib/metrics";
 import { getScope } from "@/lib/scope";
@@ -19,7 +20,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
   const user = await requirePage("expenses");
   const sp = await searchParams;
   const tab = ["pl", "entries", "categories"].includes(sp.tab ?? "") ? sp.tab! : "pl";
-  const [scope, settings, t] = await Promise.all([getScope(user), getSettings(), getT()]);
+  const [scope, settings, t, rights] = await Promise.all([getScope(user), getSettings(), getT(), editRights(user, "expenses")]);
   const range = parseRange(sp, "month");
   const cats = await prisma.expenseCategory.findMany({ orderBy: [{ kind: "asc" }, { sort: "asc" }, { name: "asc" }] });
   const canAdd = can(user, "expenses", 2);
@@ -70,7 +71,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
               note={t("For costs shared by several brands, enter each brand's share separately.")}
             />
           )}
-          <EntryList brandIds={scope.brandIds} range={range} cats={cats} sp={sp} full={full} userId={user.id} brandName={scope.brandName} brandCurrency={scope.brandCurrency} multi={!scope.current} t={t} />
+          <EntryList brandIds={scope.brandIds} range={range} cats={cats} sp={sp} may={rights.may} note={rights.note} brandName={scope.brandName} brandCurrency={scope.brandCurrency} multi={!scope.current} t={t} />
         </div>
       )}
 
@@ -266,8 +267,8 @@ async function EntryList({
   range,
   cats,
   sp,
-  full,
-  userId,
+  may,
+  note,
   brandName,
   brandCurrency,
   multi,
@@ -277,8 +278,8 @@ async function EntryList({
   range: { from: string; to: string };
   cats: { id: number; name: string; kind: string; active: boolean }[];
   sp: Record<string, string | undefined>;
-  full: boolean;
-  userId: number;
+  may: (authorId: number | null, createdAt: Date) => boolean;
+  note: string;
   brandName: (id: number) => string;
   brandCurrency: (id: number) => string;
   multi: boolean;
@@ -286,15 +287,15 @@ async function EntryList({
 }) {
   const rows = await prisma.expense.findMany({
     where: { brandId: { in: brandIds }, date: dateRange(range), ...(sp.cat ? { categoryId: Number(sp.cat) } : {}) },
-    include: { category: true },
+    include: { category: true, createdBy: { select: { name: true } } },
     orderBy: [{ date: "desc" }, { id: "desc" }],
     take: 500,
   });
-  const recent = cutoff();
   return (
     <Card
       flush
       title={t("{n} entries", { n: `${rows.length}${rows.length === 500 ? "+" : ""}` })}
+      note={note || undefined}
       action={
         <form action="/expenses" className="flex gap-2">
           {Object.entries(sp)
@@ -325,13 +326,12 @@ async function EntryList({
                 <th>{t("Category")}</th>
                 <th className="r">{t("Amount")}</th>
                 <th>{t("Note")}</th>
-                <th>{t("Entered")}</th>
+                <th>{t("Entered by")}</th>
                 <th />
               </tr>
             </thead>
             <tbody>
               {rows.map((e) => {
-                const mine = e.createdById === userId && e.createdAt.getTime() > recent;
                 return (
                   <tr key={e.id}>
                     <td className="whitespace-nowrap">{d10(e.date)}</td>
@@ -341,9 +341,12 @@ async function EntryList({
                     </td>
                     <td className="r">{money(e.amount, brandCurrency(e.brandId))}</td>
                     <td className="max-w-72 truncate text-ink-2">{e.note ?? ""}</td>
-                    <td className="whitespace-nowrap text-xs text-muted">{dt(e.createdAt)}</td>
+                    <td className="whitespace-nowrap">
+                      <div>{e.createdBy?.name ?? "–"}</div>
+                      <div className="text-xs text-muted">{dt(e.createdAt)}</div>
+                    </td>
                     <td className="r space-x-1">
-                      {(full || mine) && (
+                      {may(e.createdById, e.createdAt) && (
                         <>
                           <Dialog label={t("Edit")} title={t("Edit entry")}>
                             <ActionForm action={updateEntry} close className="space-y-3">
@@ -389,8 +392,4 @@ async function EntryList({
       )}
     </Card>
   );
-}
-
-function cutoff() {
-  return Date.now() - 3600_000;
 }

@@ -88,7 +88,6 @@
 ["Enter or import deposits, withdrawals, statements or expenses, and they'll show up here.", "录入或导入充值、提款、流水或费用后，就会显示在这里。", "Input atau impor deposit, penarikan, laporan atau biaya, dan datanya akan muncul di sini."],
 ["Enter PG/bank statements under Data entry to start comparing.", "在数据录入里录入 PG/银行流水后就可以开始对账。", "Input laporan PG/bank di Input data untuk mulai membandingkan."],
 ["Enter the player's username.", "请填写玩家账号。", "Isi username pemain."],
-["Entered", "录入时间", "Diinput"],
 ["Entered on {day}", "{day} 录入的", "Diinput pada {day}"],
 ["Entered today", "今天录入的", "Diinput hari ini"],
 ["Entitled", "应得", "Hak"],

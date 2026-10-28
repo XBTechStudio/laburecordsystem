@@ -7,5 +7,6 @@ import four from "./strings-4.json";
 import five from "./strings-5.json";
 import six from "./strings-6.json";
 import seven from "./strings-7.json";
+import eight from "./strings-8.json";
 
-export const STRINGS = [...one, ...two, ...three, ...four, ...five, ...six, ...seven] as [string, string, string][];
+export const STRINGS = [...one, ...two, ...three, ...four, ...five, ...six, ...seven, ...eight] as [string, string, string][];

@@ -14,8 +14,9 @@ export type Level = 0 | 1 | 2 | 3;
 /** `levels` = the choices that make sense for the module. "Full" adds edit, delete and configuration. */
 export const MODULES = [
   { key: "dashboard", href: "/", label: tk("Dashboard"), levels: [0, 1], hint: tk("Overview numbers and alerts") },
-  { key: "entry", href: "/entry", label: tk("Data entry"), levels: [0, 2, 3], hint: tk("Add = enter data and see own entries · Full = edit/delete anyone's") },
+  { key: "entry", href: "/entry", label: tk("Data entry"), levels: [0, 2, 3], hint: tk("Add = enter data · Full = change or delete saved entries") },
   { key: "import", href: "/import", label: tk("Excel import"), levels: [0, 2, 3], hint: tk("Full = undo imports and manage templates") },
+  { key: "transactions", href: "/transactions", label: tk("Transactions"), levels: [0, 1], hint: tk("Every deposit and withdrawal, with who entered it") },
   { key: "reports", href: "/reports", label: tk("Reports"), levels: [0, 1, 3], hint: tk("Full = save reports for the whole team") },
   { key: "players", href: "/players", label: tk("Players"), levels: [0, 1, 3], hint: tk("Full = edit player details and assign CS") },
   { key: "churn", href: "/churn", label: tk("Churn follow-up"), levels: [0, 1, 2, 3], hint: tk("Add = log contacts · Full = assign players to others") },
@@ -39,27 +40,33 @@ export function levelOf(perms: Perms, m: Module): Level {
 
 const all = (l: Level) => Object.fromEntries(MODULES.map((m) => [m.key, Math.min(l, Math.max(...m.levels)) as Level])) as Perms;
 
+/** Only the Administrator can change or delete saved data by default; everyone else views and adds. Roles can be changed in Staff & roles. */
 export const DEFAULT_ROLES: { name: string; locked?: boolean; perms: Perms }[] = [
   { name: "Administrator", locked: true, perms: all(3) },
   {
     name: "Management",
-    perms: { ...all(3), brands: 1, users: 1, settings: 1 },
+    perms: {
+      dashboard: 1,
+      entry: 2,
+      import: 2,
+      transactions: 1,
+      reports: 3,
+      players: 1,
+      churn: 2,
+      promotions: 1,
+      cs: 2,
+      reconcile: 2,
+      expenses: 2,
+      dividends: 1,
+      brands: 1,
+      users: 1,
+      audit: 1,
+      settings: 1,
+    },
   },
   {
     name: "Supervisor",
-    perms: {
-      dashboard: 1,
-      entry: 3,
-      import: 3,
-      reports: 3,
-      players: 3,
-      churn: 3,
-      promotions: 3,
-      cs: 3,
-      reconcile: 3,
-      expenses: 2,
-      audit: 1,
-    },
+    perms: { dashboard: 1, entry: 2, import: 2, transactions: 1, reports: 3, players: 1, churn: 3, promotions: 1, cs: 2, reconcile: 2, expenses: 2, audit: 1 },
   },
   { name: "Data entry", perms: { entry: 2, import: 2, players: 1 } },
   { name: "Customer service", perms: { players: 1, churn: 2, cs: 2 } },
