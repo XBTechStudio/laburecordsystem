@@ -42,6 +42,7 @@ export function BatchEntry({
   loadLists,
   totals,
   note,
+  carryBrand = false,
 }: {
   kind: string;
   cols: Col[];
@@ -52,16 +53,18 @@ export function BatchEntry({
   /** Columns summed in the footer; `split` sums separately per value of another column. */
   totals?: { col: string; label: string; split?: { by: string; values: Record<string, string> } }[];
   note?: string;
+  /** A brand picked on a row fills the empty rows below, and new rows take the brand of the row above. Off = every row starts empty. */
+  carryBrand?: boolean;
 }) {
   const router = useRouter();
   const t = useT();
-  // With more than one brand, every row picks its own brand (first column); a new row takes the brand of the row above.
+  // With more than one brand, every row picks its own brand (first column).
   const perRow = brands.length > 1;
   const single = brands.length === 1 ? brands[0].id : null;
   const brandCol: Col = { key: "brand", label: t("Brand"), type: "select", required: true, width: "9rem", options: brands.map((b) => ({ value: String(b.id), label: b.name })) };
   const allCols = perRow ? [brandCol, ...cols] : cols;
-  const fresh = (brand: number | null): Row => ({ ...blank(cols), brand: brand ? String(brand) : "" });
-  const firstBrand = initialBrand ?? single;
+  const fresh = (brand: number | null): Row => ({ ...blank(cols), brand: carryBrand && brand ? String(brand) : "" });
+  const firstBrand = carryBrand ? (initialBrand ?? single) : single;
   const [rows, setRows] = useState<Row[]>(() => Array.from({ length: 6 }, () => fresh(firstBrand)));
   const [defaultDate, setDefaultDate] = useState(nowLocal);
   const [lists, setLists] = useState<Record<number, Record<string, string[]>>>({});
@@ -99,8 +102,7 @@ export function BatchEntry({
   const serverErr = new Map((result?.errors ?? []).map((e) => [e.i, e.msg]));
 
   const setCell = (i: number, key: string, v: string) => {
-    // A brand picked on one row carries down to the empty rows below it.
-    setRows((rs) => rs.map((r, j) => (j === i || (key === "brand" && j > i && isEmpty(r, cols)) ? { ...r, [key]: v } : r)));
+    setRows((rs) => rs.map((r, j) => (j === i || (carryBrand && key === "brand" && j > i && isEmpty(r, cols)) ? { ...r, [key]: v } : r)));
     if (result) setResult(null);
   };
 

@@ -194,5 +194,9 @@
 ["Add a tier","加一档","Tambah tingkat"],
 ["Remove this tier","删除这一档","Hapus tingkat ini"],
 ["never again","不再提醒","tidak lagi"],
-["Rows without a time: today = the time you save, another date = 12:00.","没填时间的行：默认日期是今天就用保存的时间，是别的日期就用当天 12:00。","Baris tanpa jam: hari ini = jam saat disimpan, tanggal lain = 12:00."]
+["Rows without a time: today = the time you save, another date = 12:00.","没填时间的行：默认日期是今天就用保存的时间，是别的日期就用当天 12:00。","Baris tanpa jam: hari ini = jam saat disimpan, tanggal lain = 12:00."],
+["Staff may enter the date & time of deposits, withdrawals and claims","录入充值、提款和优惠领取时可以自己填日期时间","Staf boleh mengisi tanggal & jam deposit, penarikan dan klaim"],
+["Off = every row gets the time it is saved.","不勾 = 每一行都用保存那一刻的时间。","Mati = setiap baris memakai waktu saat disimpan."],
+["A brand picked on a row fills the empty rows below","某一行选了品牌，下面的空行自动跟着用","Merek yang dipilih di satu baris ikut mengisi baris kosong di bawahnya"],
+["Off = every row starts empty and staff pick its brand.","不勾 = 每一行都要自己选品牌。","Mati = setiap baris kosong dan staf memilih mereknya sendiri."]
 ]

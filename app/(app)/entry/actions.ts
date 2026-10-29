@@ -12,6 +12,7 @@ import { phoneKey } from "@/lib/format";
 import { getT } from "@/lib/i18n-server";
 import { ensurePlayers, refreshPlayerStats } from "@/lib/players";
 import { linkClaims, safely, trackPlayers, unlinkClaims } from "@/lib/promo-engine";
+import { getSettings } from "@/lib/settings";
 
 type Row = Record<string, string>;
 type Err = { i: number; msg: string };
@@ -26,7 +27,7 @@ function defaultTime(defaultDate: string) {
   return fromLocalInput(`${defaultDate}T12:00`);
 }
 
-function when(v: string | undefined, defaultDate: string): Date | null {
+function whenAt(v: string | undefined, defaultDate: string): Date | null {
   const s = (v ?? "").trim();
   if (!s) return defaultTime(defaultDate);
   if (TIME.test(s)) return fromLocalInput(s);
@@ -82,6 +83,10 @@ export async function saveBatch(kind: string, brandId: number, rows: Row[], defa
       revalidatePath("/expenses");
       return { ok: true, message };
     };
+    // With time picking off, deposits, withdrawals and claims always get the moment they are saved.
+    const pickTime = (await getSettings()).entry.pickTime;
+    const at0 = new Date();
+    const when = (v: string | undefined, d: string) => (pickTime ? whenAt(v, d) : at0);
     const NOTHING = t("Nothing was saved. Please fix the rows below.");
 
     if (kind === "txn") {

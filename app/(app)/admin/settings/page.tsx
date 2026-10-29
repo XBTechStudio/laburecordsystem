@@ -66,6 +66,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               <input name="selfFixMinutes" className="input w-32" inputMode="numeric" defaultValue={s.selfFixMinutes} disabled={ro} />
             </Field>
             <fieldset className="space-y-2.5">
+              <legend className="label">{t("Data entry")}</legend>
+              <Check name="pickTime" label={t("Staff may enter the date & time of deposits, withdrawals and claims")} hint={t("Off = every row gets the time it is saved.")} on={s.entry.pickTime} disabled={ro} />
+              <Check name="carryBrand" label={t("A brand picked on a row fills the empty rows below")} hint={t("Off = every row starts empty and staff pick its brand.")} on={s.entry.carryBrand} disabled={ro} />
+            </fieldset>
+            <fieldset className="space-y-2.5">
               <legend className="label">{t("Net profit = Win/Loss …")}</legend>
               <Check name="fees" label={"− " + t("PG and bank fees")} hint={t("Worked out from each PG/bank's fee rate on deposits")} on={s.profit.fees} disabled={ro} />
               <Check name="promos" label={"− " + t("Promotions given")} hint={t("From promotion claims")} on={s.profit.promos} disabled={ro} />

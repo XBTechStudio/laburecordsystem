@@ -11,6 +11,7 @@ import { dt, money, n } from "@/lib/format";
 import { tk, type T } from "@/lib/i18n";
 import { getT } from "@/lib/i18n-server";
 import { getScope } from "@/lib/scope";
+import { getSettings } from "@/lib/settings";
 import { loadLists, saveBatch } from "./actions";
 import { EditCell, TxnFields } from "./edit-cell";
 
@@ -41,7 +42,7 @@ export default async function EntryPage({ searchParams }: { searchParams: Promis
   const user = await requirePage("entry", 2);
   const sp = await searchParams;
   const kind: Kind = KINDS.find((k) => k.key === sp.kind)?.key ?? "txn";
-  const [scope, t] = await Promise.all([getScope(user), getT()]);
+  const [scope, t, settings] = await Promise.all([getScope(user), getT(), getSettings()]);
   const channels = await prisma.payChannel.findMany({ where: { active: true }, orderBy: [{ type: "asc" }, { name: "asc" }] });
   const chOpts = channels.map((c) => ({ value: String(c.id), label: c.name }));
 
@@ -91,7 +92,8 @@ export default async function EntryPage({ searchParams }: { searchParams: Promis
       <BatchEntry
         key={kind}
         kind={kind}
-        cols={cols[kind]}
+        cols={settings.entry.pickTime ? cols[kind] : cols[kind].filter((c) => c.key !== "time")}
+        carryBrand={settings.entry.carryBrand}
         brands={scope.brands.map((b) => ({ id: b.id, name: b.name, currency: b.currency }))}
         brandId={scope.current?.id ?? (scope.brands.length === 1 ? scope.brands[0].id : null)}
         save={saveBatch}
