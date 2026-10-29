@@ -98,7 +98,7 @@ export async function saveBatch(kind: string, brandId: number, rows: Row[], defa
         else if (!type) fail(i, "Choose Deposit or Withdrawal");
         else if (!(amt > 0)) fail(i, "Amount must be more than 0");
         else if (!at) fail(i, "Date/time isn't valid");
-        return { username: r.player?.trim() ?? "", type: type as TxnType, amount: amt, txnAt: at!, channelId: Number(r.channel) || null, ref: r.ref?.trim() || null, note: r.note?.trim() || null };
+        return { username: r.player?.trim() ?? "", type: type as TxnType, amount: amt, txnAt: at!, channelId: Number(r.channel) || null, ref: r.ref?.trim() || null, note: r.note?.trim() || null, payBank: r.payBank?.trim().slice(0, 80) || null, payAccount: r.payAccount?.trim().slice(0, 60) || null };
       });
       // Reference numbers must be unique per brand and type, both inside this batch and against what's saved.
       const seen = new Map<string, number>();
@@ -127,6 +127,8 @@ export async function saveBatch(kind: string, brandId: number, rows: Row[], defa
           channelId: p.channelId,
           ref: p.ref,
           note: p.note,
+          payBank: p.payBank,
+          payAccount: p.payAccount,
           createdById: user.id,
         })),
       });
@@ -296,6 +298,8 @@ export async function updateEntry(_p: Result, fd: FormData) {
         channelId: Number(str(fd, "channel")) || null,
         ref: str(fd, "ref") || null,
         note: str(fd, "note") || null,
+        payBank: str(fd, "payBank").slice(0, 80) || null,
+        payAccount: str(fd, "payAccount").slice(0, 60) || null,
       };
       need(data.amount > 0, "Amount must be more than 0.");
       await prisma.txn.update({ where: { id }, data });

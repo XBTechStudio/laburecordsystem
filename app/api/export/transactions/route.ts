@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
   const importIds = [...new Set(rows.flatMap((r) => (r.importId ? [r.importId] : [])))];
   const files = new Map((await prisma.importBatch.findMany({ where: { id: { in: importIds } }, select: { id: true, filename: true } })).map((b) => [b.id, b.filename]));
   const data = [
-    [t("Time"), t("Brand"), t("Player"), t("Type"), t("Amount"), t("Currency"), t("PG / bank"), t("Reference no."), t("Note"), t("Entered by"), t("Entered at"), t("Source")],
+    [t("Time"), t("Brand"), t("Player"), t("Type"), t("Amount"), t("Currency"), t("PG / bank"), t("Withdrawal bank"), t("Account no."), t("Note"), t("Reference no."), t("Entered by"), t("Entered at"), t("Source")],
     ...rows.map((r) => [
       dt(r.txnAt),
       scope.brandName(r.brandId),
@@ -34,12 +34,14 @@ export async function GET(req: NextRequest) {
       round2(n(r.amount)),
       scope.brandCurrency(r.brandId),
       r.channel?.name ?? "",
-      r.ref ?? "",
+      r.payBank ?? "",
+      r.payAccount ?? "",
       r.note ?? "",
+      r.ref ?? "",
       r.createdBy?.name ?? "",
       dt(r.createdAt),
       r.importId ? `${t("Excel import")}: ${files.get(r.importId) ?? `#${r.importId}`}` : t("Typed in"),
     ]),
   ];
-  return xlsxResponse(`transactions_${range.from}_${range.to}.xlsx`, [{ name: t("Transactions"), rows: data, widths: [17, 14, 18, 11, 12, 9, 16, 18, 24, 16, 17, 30] }]);
+  return xlsxResponse(`transactions_${range.from}_${range.to}.xlsx`, [{ name: t("Transactions"), rows: data, widths: [17, 14, 18, 11, 12, 9, 16, 16, 18, 24, 18, 16, 17, 30] }]);
 }

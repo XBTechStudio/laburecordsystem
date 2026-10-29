@@ -198,5 +198,8 @@
 ["Staff may enter the date & time of deposits, withdrawals and claims","录入充值、提款和优惠领取时可以自己填日期时间","Staf boleh mengisi tanggal & jam deposit, penarikan dan klaim"],
 ["Off = every row gets the time it is saved.","不勾 = 每一行都用保存那一刻的时间。","Mati = setiap baris memakai waktu saat disimpan."],
 ["A brand picked on a row fills the empty rows below","某一行选了品牌，下面的空行自动跟着用","Merek yang dipilih di satu baris ikut mengisi baris kosong di bawahnya"],
-["Off = every row starts empty and staff pick its brand.","不勾 = 每一行都要自己选品牌。","Mati = setiap baris kosong dan staf memilih mereknya sendiri."]
+["Off = every row starts empty and staff pick its brand.","不勾 = 每一行都要自己选品牌。","Mati = setiap baris kosong dan staf memilih mereknya sendiri."],
+["Withdrawal bank","提款银行","Bank penarikan"],
+["Account no.","户口号码","No. rekening"],
+["Withdrawal bank / account","提款银行 / 户口","Bank / rekening penarikan"]
 ]

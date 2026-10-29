@@ -13,7 +13,7 @@ import { getT } from "@/lib/i18n-server";
 import { getScope } from "@/lib/scope";
 import { getSettings } from "@/lib/settings";
 import { loadLists, saveBatch } from "./actions";
-import { EditCell, TxnFields } from "./edit-cell";
+import { EditCell, payTo, TxnFields } from "./edit-cell";
 
 const KINDS = [
   { key: "txn", label: tk("Deposits & withdrawals") },
@@ -64,8 +64,10 @@ export default async function EntryPage({ searchParams }: { searchParams: Promis
       { key: "amount", label: t("Amount"), type: "amount", required: true, width: "7rem" },
       { key: "time", label: t("Date & time"), type: "datetime", width: "11rem" },
       { key: "channel", label: t("PG / bank"), type: "select", options: chOpts, width: "9rem" },
-      { key: "ref", label: t("Reference no."), type: "text", width: "9rem", placeholder: t("optional") },
+      { key: "payBank", label: t("Withdrawal bank"), type: "text", width: "9rem", placeholder: t("optional") },
+      { key: "payAccount", label: t("Account no."), type: "text", width: "9rem", placeholder: t("optional") },
       { key: "note", label: t("Note"), type: "text", width: "9rem" },
+      { key: "ref", label: t("Reference no."), type: "text", width: "9rem", placeholder: t("optional") },
     ],
     claim: [
       { key: "player", label: t("Player username"), type: "player", required: true, width: "11rem" },
@@ -187,8 +189,9 @@ async function Recent({
             <th className="r">{t("Amount")}</th>
             <th>{t("Time")}</th>
             <th>{t("PG / bank")}</th>
-            <th>{t("Ref")}</th>
+            <th>{t("Withdrawal bank / account")}</th>
             <th>{t("Note")}</th>
+            <th>{t("Ref")}</th>
             {everyone && <th>{t("Entered by")}</th>}
             <th />
           </tr>
@@ -206,8 +209,9 @@ async function Recent({
               <td className="r">{money(tx.amount, brandCurrency(tx.brandId))}</td>
               <td className="whitespace-nowrap text-ink-2">{dt(tx.txnAt)}</td>
               <td className="text-ink-2">{tx.channel?.name ?? "–"}</td>
-              <td className="text-ink-2">{tx.ref ?? "–"}</td>
+              <td className="whitespace-nowrap text-ink-2">{payTo(tx)}</td>
               <td className="max-w-48 truncate text-ink-2">{tx.note ?? ""}</td>
+              <td className="text-ink-2">{tx.ref ?? "–"}</td>
               {everyone && <td className="whitespace-nowrap text-ink-2">{tx.createdBy?.name ?? "–"}</td>}
               {actions(
                 tx.id,

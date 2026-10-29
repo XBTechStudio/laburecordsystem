@@ -182,6 +182,9 @@ model Txn {
   channelId   Int?
   ref         String?  @db.VarChar(80)
   note        String?  @db.VarChar(255)
+  /// The player's own bank and account number the money went to (withdrawals).
+  payBank     String?  @db.VarChar(80)
+  payAccount  String?  @db.VarChar(60)
   createdById Int?
   importId    Int?
   createdAt   DateTime @default(now())

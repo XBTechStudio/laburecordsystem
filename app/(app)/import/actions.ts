@@ -19,6 +19,8 @@ export type ImportRow = {
   time?: string;
   ref?: string;
   channel?: string;
+  payBank?: string;
+  payAccount?: string;
   note?: string;
   phone?: string;
   name?: string;
@@ -123,6 +125,8 @@ export async function importChunk(batchId: number, rows: ImportRow[], offset: nu
         channelId: r.channel ? (chByName.get(r.channel.trim().toLowerCase()) ?? null) : null,
         ref: r.ref?.trim() || null,
         note: r.note?.trim()?.slice(0, 250) || null,
+        payBank: r.payBank?.trim().slice(0, 80) || null,
+        payAccount: r.payAccount?.trim().slice(0, 60) || null,
         createdById: user.id,
         importId: batchId,
       }));

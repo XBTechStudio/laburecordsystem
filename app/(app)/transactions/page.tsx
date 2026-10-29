@@ -9,7 +9,7 @@ import { count, dt, money, n } from "@/lib/format";
 import { getT } from "@/lib/i18n-server";
 import { getScope } from "@/lib/scope";
 import { txnFilter } from "@/lib/txn-filter";
-import { EditCell, TxnFields } from "../entry/edit-cell";
+import { EditCell, payTo, TxnFields } from "../entry/edit-cell";
 
 const PER_PAGE = 50;
 const FILTERS = ["q", "type", "channel", "by", "source", "player"];
@@ -177,8 +177,9 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
                   <th>{t("Type")}</th>
                   <th className="r">{t("Amount")}</th>
                   <th>{t("PG / bank")}</th>
-                  <th>{t("Ref")}</th>
+                  <th>{t("Withdrawal bank / account")}</th>
                   <th>{t("Note")}</th>
+                  <th>{t("Ref")}</th>
                   <th>{t("Entered by")}</th>
                   {canEdit && <th />}
                 </tr>
@@ -196,10 +197,11 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
                     <td>{tx.type === "DEPOSIT" ? <Chip tone="good">{t("Deposit")}</Chip> : <Chip tone="warning">{t("Withdrawal")}</Chip>}</td>
                     <td className="r">{money(tx.amount, scope.brandCurrency(tx.brandId))}</td>
                     <td className="text-ink-2">{tx.channel?.name ?? "–"}</td>
-                    <td className="text-ink-2">{tx.ref ?? "–"}</td>
+                    <td className="whitespace-nowrap text-ink-2">{payTo(tx)}</td>
                     <td className="max-w-48 truncate text-ink-2" title={tx.note ?? undefined}>
                       {tx.note ?? ""}
                     </td>
+                    <td className="text-ink-2">{tx.ref ?? "–"}</td>
                     <td className="whitespace-nowrap">
                       <div>{tx.createdBy?.name ?? "–"}</div>
                       <div className="text-xs text-muted" title={tx.importId ? files.get(tx.importId) : undefined}>
