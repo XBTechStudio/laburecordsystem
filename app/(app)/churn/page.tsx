@@ -44,6 +44,7 @@ export default async function ChurnPage({ searchParams }: { searchParams: Promis
     assigned: sp.cs === "me" ? "me" : sp.cs === "none" ? "none" : undefined,
     meId: user.id,
     contacted: sp.status === "contacted" ? true : sp.status === "open" ? false : undefined,
+    refollowBefore: sp.status === "again" && settings.refollowDays > 0 ? cutoff(settings.refollowDays) : undefined,
   };
   const [list, counts, promos] = await Promise.all([
     queryPlayers(settings.tierScoring, { ...base, idleBefore: tab.idleBefore, idleAfter: tab.idleAfter, sort: "value", limit: PER_PAGE, offset: (page - 1) * PER_PAGE }),
@@ -56,6 +57,7 @@ export default async function ChurnPage({ searchParams }: { searchParams: Promis
     : [];
   const lastContact = new Map<number, (typeof contacts)[number]>();
   for (const c of contacts) if (!lastContact.has(c.playerId)) lastContact.set(c.playerId, c);
+  const timesContacted = (playerId: number, since: Date | null) => contacts.filter((c) => c.playerId === playerId && (!since || c.contactedAt > since)).length;
   const recallSince = cutoff(settings.recallDays);
   const nowMs = cutoff(0).getTime();
 
@@ -106,6 +108,7 @@ export default async function ChurnPage({ searchParams }: { searchParams: Promis
           <option value="">{t("Any follow-up status")}</option>
           <option value="open">{t("Not contacted yet")}</option>
           <option value="contacted">{t("Already contacted")}</option>
+          {settings.refollowDays > 0 && <option value="again">{t("Due a follow-up again ({n}+ days)", { n: settings.refollowDays })}</option>}
         </AutoSelect>
         <AutoSelect name="cs" defaultValue={sp.cs ?? ""} className="input w-auto">
           <option value="">{t("Any CS")}</option>
@@ -176,6 +179,11 @@ export default async function ChurnPage({ searchParams }: { searchParams: Promis
                               <span className="text-xs text-ink-2">
                                 {c.staff.name} · {t(c.channel)} · {ago(c.contactedAt, t)}
                               </span>
+                              <span className="text-xs text-muted" title={t("Contacts since the last deposit / in total")}>
+                                {t("{a} times", { a: timesContacted(p.id, p.lastDepositAt) })}
+                                {timesContacted(p.id, null) > timesContacted(p.id, p.lastDepositAt) ? " / " + timesContacted(p.id, null) : ""}
+                              </span>
+                              {settings.refollowDays > 0 && c.contactedAt.getTime() < nowMs - settings.refollowDays * 86400_000 && <Chip tone="warning">{t("Follow up again")}</Chip>}
                             </div>
                             {c.result && <div className="mt-0.5 truncate text-xs text-ink-2">{c.result}</div>}
                           </>
@@ -186,7 +194,7 @@ export default async function ChurnPage({ searchParams }: { searchParams: Promis
                       {canLog && (
                         <td className="r">
                           <Dialog label={t("Log contact")} title={t("Log contact: {name}", { name: p.username })} className="btn btn-sm">
-                            <ContactForm playerId={p.id} channels={settings.csChannels} promos={promos.filter((x) => x.brandId === p.brandId)} who={other} />
+                            <ContactForm playerId={p.id} channels={settings.csChannels} templates={settings.csTemplates} promos={promos.filter((x) => x.brandId === p.brandId)} who={other} />
                           </Dialog>
                         </td>
                       )}

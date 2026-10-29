@@ -11,6 +11,7 @@ import { editRights } from "@/lib/edit-rights";
 import { phoneKey } from "@/lib/format";
 import { getT } from "@/lib/i18n-server";
 import { ensurePlayers, refreshPlayerStats } from "@/lib/players";
+import { linkClaims, safely, trackPlayers, unlinkClaims } from "@/lib/promo-engine";
 
 type Row = Record<string, string>;
 type Err = { i: number; msg: string };
@@ -125,6 +126,7 @@ export async function saveBatch(kind: string, brandId: number, rows: Row[], defa
         })),
       });
       await refreshPlayerStats([...ids.values()]);
+      await safely("entry", () => trackPlayers([...ids.values()], parsed.map((p) => p.txnAt)));
       const dep = parsed.filter((p) => p.type === "DEPOSIT");
       const wd = parsed.filter((p) => p.type === "WITHDRAW");
       await audit(user, "CREATE", "Txn", null, brandId, `Entered ${dep.length} deposits and ${wd.length} withdrawals for ${brand.name}`, {
@@ -154,6 +156,7 @@ export async function saveBatch(kind: string, brandId: number, rows: Row[], defa
         byName.set(name.toLowerCase(), p);
       }
       const { ids, created } = await ensurePlayers(brandId, parsed.map((p) => ({ username: p.username })));
+      const lastId = (await prisma.promoClaim.aggregate({ _max: { id: true } }))._max.id ?? 0;
       await prisma.promoClaim.createMany({
         data: parsed.map((p) => ({
           promotionId: byName.get(p.promo.toLowerCase())!.id,
@@ -163,6 +166,7 @@ export async function saveBatch(kind: string, brandId: number, rows: Row[], defa
           createdById: user.id,
         })),
       });
+      await safely("claims", () => linkClaims({ id: { gt: lastId }, playerId: { in: [...ids.values()] }, createdById: user.id }));
       await audit(user, "CREATE", "PromoClaim", null, brandId, `Entered ${parsed.length} promotion claims for ${brand.name}`, { newPromotions: newNames, newPlayers: created });
       return done(
         t("Saved {n} claims.", { n: parsed.length }) +
@@ -243,10 +247,12 @@ export async function deleteEntry(_p: Result, fd: FormData) {
       const user = await mayChange(t.createdById, t.createdAt, t.brandId);
       await prisma.txn.delete({ where: { id } });
       await refreshPlayerStats([t.playerId]);
+      await safely("delete", () => trackPlayers([t.playerId], [t.txnAt]));
       await audit(user, "DELETE", "Txn", id, t.brandId, `Deleted ${t.type.toLowerCase()} of ${t.amount} for ${t.player.username}`, t);
     } else if (kind === "claim") {
       const c = await prisma.promoClaim.findUniqueOrThrow({ where: { id }, include: { promotion: true } });
       const user = await mayChange(c.createdById, c.createdAt, c.promotion.brandId);
+      await safely("unlink", () => unlinkClaims({ id }));
       await prisma.promoClaim.delete({ where: { id } });
       await audit(user, "DELETE", "PromoClaim", id, c.promotion.brandId, `Deleted claim of ${c.amount} (${c.promotion.name})`, c);
     } else if (kind === "expense") {
@@ -289,6 +295,7 @@ export async function updateEntry(_p: Result, fd: FormData) {
       need(data.amount > 0, "Amount must be more than 0.");
       await prisma.txn.update({ where: { id }, data });
       await refreshPlayerStats([t.playerId]);
+      await safely("edit", () => trackPlayers([t.playerId], [t.txnAt, data.txnAt]));
       await audit(user, "UPDATE", "Txn", id, t.brandId, `Edited ${data.type.toLowerCase()} #${id}`, { before: t, after: data });
     } else if (kind === "claim") {
       const c = await prisma.promoClaim.findUniqueOrThrow({ where: { id }, include: { promotion: true } });

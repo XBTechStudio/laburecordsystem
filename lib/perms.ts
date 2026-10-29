@@ -19,6 +19,7 @@ export const MODULES = [
   { key: "transactions", href: "/transactions", label: tk("Transactions"), levels: [0, 1], hint: tk("Every deposit and withdrawal, with who entered it") },
   { key: "reports", href: "/reports", label: tk("Reports"), levels: [0, 1, 3], hint: tk("Full = save reports for the whole team") },
   { key: "players", href: "/players", label: tk("Players"), levels: [0, 1, 3], hint: tk("Full = edit player details and assign CS") },
+  { key: "alerts", href: "/alerts", label: tk("Follow-up alerts"), levels: [0, 1, 2, 3], hint: tk("Add = act on own alerts · Full = see and handle everyone's") },
   { key: "churn", href: "/churn", label: tk("Churn follow-up"), levels: [0, 1, 2, 3], hint: tk("Add = log contacts · Full = assign players to others") },
   { key: "promotions", href: "/promotions", label: tk("Promotions"), levels: [0, 1, 3], hint: tk("Full = create and edit promotions") },
   { key: "cs", href: "/cs", label: tk("CS recall tracking"), levels: [0, 1, 2, 3], hint: tk("Add = log own contacts · Full = edit/delete any log") },
@@ -35,6 +36,8 @@ export type Module = (typeof MODULES)[number]["key"];
 export type Perms = Partial<Record<Module, Level>>;
 
 export function levelOf(perms: Perms, m: Module): Level {
+  // Roles saved before follow-up alerts existed get them at the level they have for following up players.
+  if (m === "alerts" && perms.alerts === undefined) return Math.max(perms.churn ?? 0, perms.cs ?? 0) as Level;
   return (perms[m] ?? 0) as Level;
 }
 
@@ -52,6 +55,7 @@ export const DEFAULT_ROLES: { name: string; locked?: boolean; perms: Perms }[] =
       transactions: 1,
       reports: 3,
       players: 1,
+      alerts: 1,
       churn: 2,
       promotions: 1,
       cs: 2,
@@ -66,8 +70,8 @@ export const DEFAULT_ROLES: { name: string; locked?: boolean; perms: Perms }[] =
   },
   {
     name: "Supervisor",
-    perms: { dashboard: 1, entry: 2, import: 2, transactions: 1, reports: 3, players: 1, churn: 3, promotions: 1, cs: 2, reconcile: 2, expenses: 2, audit: 1 },
+    perms: { dashboard: 1, entry: 2, import: 2, transactions: 1, reports: 3, players: 1, alerts: 3, churn: 3, promotions: 1, cs: 2, reconcile: 2, expenses: 2, audit: 1 },
   },
   { name: "Data entry", perms: { entry: 2, import: 2, players: 1 } },
-  { name: "Customer service", perms: { players: 1, churn: 2, cs: 2 } },
+  { name: "Customer service", perms: { players: 1, alerts: 2, churn: 2, cs: 2 } },
 ];

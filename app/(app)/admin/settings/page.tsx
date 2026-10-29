@@ -7,16 +7,19 @@ import { n } from "@/lib/format";
 import { tk, type T } from "@/lib/i18n";
 import { getT } from "@/lib/i18n-server";
 import { getSettings } from "@/lib/settings";
-import { saveChannel, saveFollowUp, saveGeneral, saveRules, saveTiers, toggleChannel } from "./actions";
+import { saveAlerts, saveChannel, saveFollowUp, saveGeneral, saveRules, saveTiers, toggleChannel } from "./actions";
 import { TierEditor } from "./tier-editor";
 
 const TABS = [
   ["general", tk("General")],
   ["tiers", tk("Player tiers")],
   ["followup", tk("Churn & CS")],
+  ["alerts", tk("Alerts")],
   ["rules", tk("Promotions & reconciliation")],
   ["channels", tk("PG & bank channels")],
 ] as const;
+
+const WEEKDAYS = [tk("Monday"), tk("Tuesday"), tk("Wednesday"), tk("Thursday"), tk("Friday"), tk("Saturday"), tk("Sunday")];
 
 function Check({ name, label, hint, on, disabled }: { name: string; label: string; hint?: string; on: boolean; disabled: boolean }) {
   return (
@@ -36,6 +39,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const want = (await searchParams).tab;
   const tab = TABS.find(([k]) => k === want)?.[0] ?? "general";
   const [s, t] = await Promise.all([getSettings(), getT()]);
+  const roles = tab === "alerts" ? await prisma.role.findMany({ orderBy: { name: "asc" } }) : [];
   const channels = tab === "channels" ? await prisma.payChannel.findMany({ orderBy: [{ active: "desc" }, { type: "asc" }, { name: "asc" }] }) : [];
   const save = (label = t("Save")) => !ro && <Submit>{label}</Submit>;
 
@@ -94,6 +98,90 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <Field label={t("Contact channels")} hint={t("One per line. CS pick from this list when they log a contact.")}>
               <textarea name="csChannels" rows={5} className="input" defaultValue={s.csChannels.join("\n")} disabled={ro} />
             </Field>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label={t("Follow up again after (days)")} hint={t("Contacted this many days ago and still no deposit: CS get a reminder. 0 = off.")}>
+                <input name="refollowDays" className="input w-32" inputMode="numeric" defaultValue={s.refollowDays} disabled={ro} />
+              </Field>
+              <Field label={t("Counts as recalled from (deposit)")} hint={t("A deposit after a contact counts as a successful recall from this amount. 0 = any deposit.")}>
+                <input name="recallMinAmount" className="input w-32" inputMode="decimal" defaultValue={s.recallMinAmount} disabled={ro} />
+              </Field>
+            </div>
+            <Field label={t("Saved messages")} hint={t("Messages CS can pick when logging a contact. Leave an empty line between messages.")}>
+              <textarea name="csTemplates" rows={6} className="input" defaultValue={s.csTemplates.join("\n\n")} disabled={ro} />
+            </Field>
+            {save()}
+          </ActionForm>
+        </Card>
+      )}
+
+      {tab === "alerts" && (
+        <Card>
+          <ActionForm action={saveAlerts} className="max-w-2xl space-y-5">
+            <p className="text-sm text-ink-2">
+              {t("How tracked promotions count days and weeks, and who gets told. Each promotion's own conditions, reminder level and claim deadline are set on the Promotions page.")}
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label={t("A business day starts at")} hint={t("0 = midnight. Daily promotions reset at this hour.")}>
+                <select name="dayStartHour" className="input w-32" defaultValue={s.alerts.dayStartHour} disabled={ro}>
+                  {Array.from({ length: 24 }, (_, h) => (
+                    <option key={h} value={h}>
+                      {String(h).padStart(2, "0")}:00
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label={t("A week starts on")}>
+                <select name="weekStartDay" className="input w-40" defaultValue={s.alerts.weekStartDay} disabled={ro}>
+                  {WEEKDAYS.map((d, i) => (
+                    <option key={d} value={i + 1}>
+                      {t(d)}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+            <fieldset className="space-y-2">
+              <legend className="label">{t("When a player is close to several promotions")}</legend>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="radio" name="notify" value="nearest" defaultChecked={s.alerts.notify === "nearest"} disabled={ro} className="accent-[var(--brand)]" />
+                {t("Only alert the one they are closest to")}
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="radio" name="notify" value="all" defaultChecked={s.alerts.notify === "all"} disabled={ro} className="accent-[var(--brand)]" />
+                {t("Alert every promotion they are close to")}
+              </label>
+            </fieldset>
+            <fieldset className="space-y-2">
+              <legend className="label">{t("Who gets the alert")}</legend>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="radio" name="target" value="owner" defaultChecked={s.alerts.target === "owner"} disabled={ro} className="accent-[var(--brand)]" />
+                {t("The player's CS (everyone on the brand if the player has no CS yet)")}
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="radio" name="target" value="team" defaultChecked={s.alerts.target === "team"} disabled={ro} className="accent-[var(--brand)]" />
+                {t("Everyone on the brand")}
+              </label>
+            </fieldset>
+            <fieldset>
+              <legend className="label">{t("Roles that receive alerts")}</legend>
+              <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-sm">
+                {roles.map((r) => (
+                  <label key={r.id} className="flex items-center gap-2">
+                    <input type="checkbox" name="roleId" value={r.id} defaultChecked={s.alerts.roleIds.includes(r.id)} disabled={ro} className="h-4 w-4 accent-[var(--brand)]" />
+                    {t(r.name)}
+                  </label>
+                ))}
+              </div>
+              <span className="hint block">{t("Tick none for every role that can act on follow-up alerts (Staff & roles).")}</span>
+            </fieldset>
+            <div className="space-y-2.5">
+              <Check name="popup" label={t("Pop up new alerts on screen")} on={s.alerts.popup} disabled={ro} />
+              <Check name="sound" label={t("Play a sound with new alerts")} on={s.alerts.sound} disabled={ro} />
+              <Check name="recall" label={t("Tell the CS when a player they contacted deposits again")} on={s.alerts.recall} disabled={ro} />
+            </div>
+            <Field label={t("Check for new alerts every (seconds)")}>
+              <input name="pollSeconds" className="input w-32" inputMode="numeric" defaultValue={s.alerts.pollSeconds} disabled={ro} />
+            </Field>
             {save()}
           </ActionForm>
         </Card>
@@ -116,18 +204,6 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             </Field>
             <Field label={t("Reconciliation tolerance")} hint={t("Balance differences up to this amount count as matched (rounding, small charges).")}>
               <input name="reconTolerance" className="input w-32" inputMode="decimal" defaultValue={s.reconTolerance} disabled={ro} />
-            </Field>
-            <Field
-              label={t("Statement match: time window (minutes)")}
-              hint={t("A line on a PG / bank statement and a recorded deposit or withdrawal with exactly the same amount count as the same when their times are this close.")}
-            >
-              <input name="statementMinutes" className="input w-32" inputMode="numeric" defaultValue={s.statementMinutes} disabled={ro} />
-            </Field>
-            <Field
-              label={t("Statement match: time window (minutes)")}
-              hint={t("A line on a PG / bank statement and a recorded deposit or withdrawal with exactly the same amount count as the same when their times are this close.")}
-            >
-              <input name="statementMinutes" className="input w-32" inputMode="numeric" defaultValue={s.statementMinutes} disabled={ro} />
             </Field>
             <Field
               label={t("Statement match: time window (minutes)")}

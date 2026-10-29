@@ -50,6 +50,8 @@ export type PlayerFilter = {
   hasDeposit?: boolean;
   /** true = someone contacted them after their last deposit; false = nobody has yet. */
   contacted?: boolean;
+  /** Contacted after their last deposit, but the latest contact is older than this: due a second follow-up. */
+  refollowBefore?: Date;
   sort?: "value" | "deposit" | "recent" | "idle" | "net" | "newest";
   limit: number;
   offset: number;
@@ -79,6 +81,10 @@ export async function queryPlayers(s: TierScoring, f: PlayerFilter): Promise<{ r
   if (f.contacted != null) {
     const ex = Prisma.sql`EXISTS (SELECT 1 FROM \`ContactLog\` c WHERE c.playerId = p.id AND c.contactedAt > p.lastDepositAt)`;
     where.push(f.contacted ? ex : Prisma.sql`NOT ${ex}`);
+  }
+  if (f.refollowBefore) {
+    where.push(Prisma.sql`EXISTS (SELECT 1 FROM \`ContactLog\` c WHERE c.playerId = p.id AND c.contactedAt > p.lastDepositAt)`);
+    where.push(Prisma.sql`NOT EXISTS (SELECT 1 FROM \`ContactLog\` c WHERE c.playerId = p.id AND c.contactedAt >= ${f.refollowBefore})`);
   }
   if (f.idleBefore) where.push(Prisma.sql`p.lastDepositAt < ${f.idleBefore}`);
   if (f.idleAfter) where.push(Prisma.sql`p.lastDepositAt >= ${f.idleAfter}`);

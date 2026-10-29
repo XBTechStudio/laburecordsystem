@@ -157,7 +157,7 @@ export function Dialog({
       <dialog
         ref={ref}
         onClose={() => setOpen(false)}
-        className={`m-auto w-[calc(100%-2rem)] ${wide ? "max-w-3xl" : "max-w-lg"} rounded-xl border border-line bg-surface p-0 text-ink shadow-2xl backdrop:bg-black/40`}
+        className={`m-auto w-[calc(100%-2rem)] ${wide ? "max-w-3xl" : "max-w-lg"} rounded-xl border border-line bg-surface p-0 text-left font-normal whitespace-normal text-ink shadow-2xl backdrop:bg-black/40`}
       >
         <div className="flex items-center border-b border-line px-5 py-3">
           <h3 className="font-semibold">{title}</h3>

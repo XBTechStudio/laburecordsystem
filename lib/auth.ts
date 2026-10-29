@@ -103,6 +103,7 @@ export type CurrentUser = {
   id: number;
   username: string;
   name: string;
+  roleId: number;
   roleName: string;
   perms: Perms;
   /** null = every brand */
@@ -126,6 +127,7 @@ export const getUser = cache(async (): Promise<CurrentUser | null> => {
     id: u.id,
     username: u.username,
     name: u.name,
+    roleId: u.roleId,
     roleName: u.role.name,
     perms: (u.role.perms ?? {}) as Perms,
     brandIds: u.allBrands ? null : u.brands.map((b) => b.brandId),

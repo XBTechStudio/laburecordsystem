@@ -13,6 +13,7 @@ import { getSettings, scorePlayer } from "@/lib/settings";
 import { assignPlayer, deleteContact } from "../../cs/actions";
 import { updatePlayer } from "../actions";
 import { getT } from "@/lib/i18n-server";
+import { progressText, readRule, tierMet } from "@/lib/promo-rule";
 
 function daysAgo(days: number) {
   return Date.now() - days * 86400_000;
@@ -48,6 +49,22 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
     prisma.txn.findFirst({ where: { playerId: id }, orderBy: { txnAt: "asc" }, select: { txnAt: true } }),
   ]);
   const visibleTwins = twins.filter((t) => canSeeBrand(user, t.brandId));
+  // Progress towards tracked promotions in their current periods, and bonuses not claimed yet.
+  const [progress, openAwards] = await Promise.all([
+    prisma.promoProgress.findMany({ where: { playerId: id, periodEnd: { gt: new Date() } }, include: { promotion: true }, orderBy: { periodKey: "desc" } }),
+    prisma.promoAward.findMany({
+      where: { playerId: id, claimedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
+      include: { promotion: { select: { name: true } } },
+      orderBy: { eligibleAt: "desc" },
+      take: 20,
+    }),
+  ]);
+  const tracking = progress.flatMap((p) => {
+    const rule = readRule(p.promotion.rule);
+    if (!rule || !p.promotion.active) return [];
+    const next = rule.tiers.findIndex((tr) => !tierMet(rule, tr, n(p.amount), p.count));
+    return [{ p, rule, next }];
+  });
   const since = daysAgo(settings.recallDays);
   const lastOther = contacts.find((c) => c.staffId !== user.id && c.contactedAt.getTime() > since);
 
@@ -133,7 +150,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
           )}
           {canLog && (
             <Dialog label={"+ " + t("Log contact")} title={t("Log contact: {name}", { name: player.username })} className="btn btn-primary btn-sm">
-              <ContactForm playerId={id} channels={settings.csChannels} promos={promos} who={lastOther ? { name: lastOther.staff.name, when: ago(lastOther.contactedAt, t) } : null} />
+              <ContactForm playerId={id} channels={settings.csChannels} templates={settings.csTemplates} promos={promos} who={lastOther ? { name: lastOther.staff.name, when: ago(lastOther.contactedAt, t) } : null} />
             </Dialog>
           )}
         </div>
@@ -345,6 +362,14 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
                         {n(c.bonus) > 0 && ` · ${t("Bonus")} ${money(c.bonus, cur)}`}
                       </div>
                       {c.result && <div className="mt-0.5 text-ink-2">{c.result}</div>}
+                      {c.message && <div className="mt-1 rounded-md bg-surface-2 px-2 py-1 text-xs whitespace-pre-wrap text-ink-2">{c.message}</div>}
+                      {c.recalledAt && (
+                        <div className="mt-1">
+                          <Chip tone="good">
+                            {t("Recalled")}: {money(c.recallAmount ?? 0, cur)} · {dt(c.recalledAt)}
+                          </Chip>
+                        </div>
+                      )}
                     </div>
                     {csRights.may(c.staffId, c.createdAt) && (
                       <ActionButton action={deleteContact} fields={{ id: c.id }} question={t("Delete this contact record?")} className="btn btn-ghost btn-sm text-muted">
@@ -356,6 +381,32 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
               </ul>
             )}
           </Card>
+          {(tracking.length > 0 || openAwards.length > 0) && (
+            <Card flush title={t("Promotion progress")} note={t("Current periods")}>
+              <ul className="divide-y divide-[var(--line)] text-sm">
+                {tracking.map(({ p, rule, next }) => (
+                  <li key={p.id} className="px-4 py-2.5">
+                    <Link className="link font-medium" href={`/promotions/${p.promotionId}`}>
+                      {p.promotion.name}
+                    </Link>
+                    <div className="text-xs text-ink-2">
+                      {next < 0
+                        ? t("All tiers reached")
+                        : t("Tier {n}", { n: next + 1 }) + ": " + progressText(rule, rule.tiers[next], n(p.amount), p.count, t, cur)}
+                    </div>
+                  </li>
+                ))}
+                {openAwards.map((a) => (
+                  <li key={"a" + a.id} className="flex items-center gap-2 px-4 py-2.5">
+                    <span className="min-w-0 flex-1 truncate">{a.promotion.name}</span>
+                    <Chip tone="warning">
+                      {money(a.bonus, cur)} · {a.eligibleAt > new Date() ? t("From next period") : t("Not claimed yet")}
+                    </Chip>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
           <Card flush title={t("Promotion claims")} note={t("Latest 20")}>
             {claims.length === 0 ? (
               <Empty title={t("No promotions claimed")} />

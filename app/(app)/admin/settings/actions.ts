@@ -70,12 +70,23 @@ export async function saveFollowUp(_p: Result, fd: FormData) {
       .map((s) => s.trim())
       .filter(Boolean);
     const recall = int(fd, "recallDays");
+    const refollow = int(fd, "refollowDays");
+    const minAmount = num(fd, "recallMinAmount") || 0;
+    const templates = str(fd, "csTemplates")
+      .split(/\n\s*\n/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    need(refollow >= 0, "Follow-up-again days can't be negative.");
+    need(minAmount >= 0, "Minimum deposit can't be negative.");
     need(days.length, "Enter at least one churn threshold, e.g. 7, 15, 30.");
     need(recall > 0, "Return window must be at least 1 day.");
     need(channels.length, "Enter at least one contact channel.");
     await save("churnDays", [...new Set(days)].sort((a, b) => a - b), "churn thresholds");
     await save("recallDays", recall, "return window");
     await save("csChannels", channels, "CS channels");
+    await save("refollowDays", refollow, "follow-up-again days");
+    await save("recallMinAmount", minAmount, "recall minimum deposit");
+    await save("csTemplates", templates, "saved CS messages");
   });
 }
 
@@ -92,8 +103,6 @@ export async function saveRules(_p: Result, fd: FormData) {
     await save("promoWindowDays", win, "promotion effect window");
     await save("promoAdjustPercent", adj, "promotion cost threshold");
     await save("reconTolerance", tol, "reconciliation tolerance");
-    await save("statementMinutes", gap, "statement matching time window");
-    await save("statementMinutes", gap, "statement matching time window");
     await save("statementMinutes", gap, "statement matching time window");
   });
 }
@@ -132,5 +141,29 @@ export async function toggleChannel(_p: Result, fd: FormData) {
     await prisma.payChannel.update({ where: { id }, data: { active: !c.active } });
     await audit(user, "UPDATE", "PayChannel", id, null, `${c.active ? "Deactivated" : "Reactivated"} channel ${c.name}`);
     revalidatePath("/admin/settings");
+  });
+}
+
+export async function saveAlerts(_p: Result, fd: FormData) {
+  return run(async () => {
+    const hour = int(fd, "dayStartHour");
+    const week = int(fd, "weekStartDay");
+    const poll = int(fd, "pollSeconds");
+    need(hour >= 0 && hour <= 23, "The day must start at an hour from 0 to 23.");
+    need(week >= 1 && week <= 7, "Choose the first day of the week.");
+    need(poll >= 5 && poll <= 600, "Check for new alerts every 5 to 600 seconds.");
+    const v: Settings["alerts"] = {
+      dayStartHour: hour,
+      weekStartDay: week,
+      notify: str(fd, "notify") === "all" ? "all" : "nearest",
+      target: str(fd, "target") === "team" ? "team" : "owner",
+      roleIds: fd.getAll("roleId").map(Number).filter(Number.isInteger),
+      popup: fd.get("popup") === "on",
+      sound: fd.get("sound") === "on",
+      pollSeconds: poll,
+      recall: fd.get("recall") === "on",
+    };
+    await save("alerts", v, "alert settings");
+    return "Alert settings saved.";
   });
 }

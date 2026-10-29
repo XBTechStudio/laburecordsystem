@@ -61,3 +61,54 @@ export function judge(s: PromoStat, adjustPercent: number) {
   const verdict = s.claims === 0 ? "none" : net < 0 ? "cancel" : cost > adjustPercent ? "adjust" : "keep";
   return { net, cost, verdict } as const;
 }
+
+export type TrackStat = { reminded: number; contacted: number; reachedAfter: number; eligible: number; claimed: number; claimedBonus: number; expired: number; pending: number };
+
+export const emptyTrack = (): TrackStat => ({ reminded: 0, contacted: 0, reachedAfter: 0, eligible: 0, claimed: 0, claimedBonus: 0, expired: 0, pending: 0 });
+
+/**
+ * Tracked promotions in a period: players CS were reminded about, how many of them then qualified,
+ * and the bonuses that became claimable (claimed, expired, still open).
+ */
+export async function trackStats(promoIds: number[], range: Range) {
+  const out = new Map<number, TrackStat>();
+  if (!promoIds.length) return out;
+  const t0 = dayStart(range.from);
+  const t1 = dayStart(addDays(range.to, 1));
+  const list = Prisma.join(promoIds);
+  const now = new Date();
+  const [alerts, after, awards] = await Promise.all([
+    prisma.$queryRaw<{ pid: number; reminded: bigint; contacted: bigint }[]>`
+      SELECT promotionId AS pid, COUNT(DISTINCT playerId) AS reminded, COUNT(DISTINCT CASE WHEN outcome = 'contacted' THEN playerId END) AS contacted
+      FROM \`Alert\` WHERE kind = 'NEAR' AND promotionId IN (${list}) AND createdAt >= ${t0} AND createdAt < ${t1}
+      GROUP BY promotionId`,
+    prisma.$queryRaw<{ pid: number; n: bigint }[]>`
+      SELECT a.promotionId AS pid, COUNT(DISTINCT a.playerId, a.periodKey) AS n
+      FROM \`PromoAward\` a
+      WHERE a.promotionId IN (${list}) AND a.eligibleAt >= ${t0} AND a.eligibleAt < ${t1}
+        AND EXISTS (SELECT 1 FROM \`Alert\` x WHERE x.kind = 'NEAR' AND x.promotionId = a.promotionId AND x.playerId = a.playerId AND x.periodKey = a.periodKey)
+      GROUP BY a.promotionId`,
+    prisma.$queryRaw<{ pid: number; eligible: bigint; claimed: bigint; claimedBonus: unknown; expired: bigint }[]>`
+      SELECT promotionId AS pid, COUNT(*) AS eligible, SUM(claimedAt IS NOT NULL) AS claimed,
+        SUM(CASE WHEN claimedAt IS NOT NULL THEN bonus ELSE 0 END) AS claimedBonus,
+        SUM(claimedAt IS NULL AND expiresAt IS NOT NULL AND expiresAt <= ${now}) AS expired
+      FROM \`PromoAward\` WHERE promotionId IN (${list}) AND eligibleAt >= ${t0} AND eligibleAt < ${t1}
+      GROUP BY promotionId`,
+  ]);
+  const get = (pid: number) => {
+    let s = out.get(pid);
+    if (!s) out.set(pid, (s = emptyTrack()));
+    return s;
+  };
+  for (const r of alerts) Object.assign(get(r.pid), { reminded: Number(r.reminded), contacted: Number(r.contacted) });
+  for (const r of after) get(r.pid).reachedAfter = Number(r.n);
+  for (const r of awards) {
+    const s = get(r.pid);
+    s.eligible = Number(r.eligible);
+    s.claimed = Number(r.claimed);
+    s.claimedBonus = n(r.claimedBonus as number);
+    s.expired = Number(r.expired);
+    s.pending = s.eligible - s.claimed - s.expired;
+  }
+  return out;
+}

@@ -32,6 +32,20 @@ enum CategoryKind {
   INCOME
 }
 
+/// What a follow-up alert is about.
+enum AlertKind {
+  /// Close to the next tier of a tracked promotion.
+  NEAR
+  /// Reached a tier: the bonus can be claimed.
+  ELIGIBLE
+  /// A bonus that hasn't been claimed runs out soon.
+  EXPIRING
+  /// A contacted player deposited again.
+  RECALLED
+  /// Contacted a while ago and still no deposit.
+  REFOLLOW
+}
+
 enum DividendPeriod {
   MONTHLY
   QUARTERLY
@@ -63,11 +77,12 @@ model User {
   lastLoginAt  DateTime?
   createdAt    DateTime  @default(now())
 
-  role     Role         @relation(fields: [roleId], references: [id])
-  brands   UserBrand[]
-  sessions Session[]
-  contacts ContactLog[]
-  assigned Player[]     @relation("AssignedStaff")
+  role       Role         @relation(fields: [roleId], references: [id])
+  brands     UserBrand[]
+  sessions   Session[]
+  contacts   ContactLog[]
+  assigned   Player[]     @relation("AssignedStaff")
+  alertsDone Alert[]      @relation("AlertDoneBy")
 
   txnsEntered     Txn[]        @relation("TxnEnteredBy")
   claimsEntered   PromoClaim[] @relation("ClaimEnteredBy")
@@ -140,11 +155,14 @@ model Player {
   createdAt      DateTime  @default(now())
   importId       Int?
 
-  brand      Brand        @relation(fields: [brandId], references: [id])
-  assignedTo User?        @relation("AssignedStaff", fields: [assignedToId], references: [id], onDelete: SetNull)
+  brand      Brand           @relation(fields: [brandId], references: [id])
+  assignedTo User?           @relation("AssignedStaff", fields: [assignedToId], references: [id], onDelete: SetNull)
   txns       Txn[]
   claims     PromoClaim[]
   contacts   ContactLog[]
+  progress   PromoProgress[]
+  awards     PromoAward[]
+  alerts     Alert[]
 
   @@unique([brandId, username])
   @@index([phoneKey])
@@ -297,16 +315,24 @@ model Expense {
 // ---------- promotions & CS ----------
 
 model Promotion {
-  id        Int      @id @default(autoincrement())
+  id        Int       @id @default(autoincrement())
   brandId   Int
-  name      String   @db.VarChar(120)
-  note      String?  @db.VarChar(255)
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
+  name      String    @db.VarChar(120)
+  note      String?   @db.VarChar(255)
+  active    Boolean   @default(true)
+  /// Claim conditions the system tracks (see lib/promo-rule.ts). null = the promotion is only analysed from its claims.
+  rule      Json?
+  /// Tracking runs between these days (inclusive); null = no limit.
+  startDay  DateTime? @db.Date
+  endDay    DateTime? @db.Date
+  createdAt DateTime  @default(now())
 
-  brand    Brand        @relation(fields: [brandId], references: [id])
+  brand    Brand           @relation(fields: [brandId], references: [id])
   claims   PromoClaim[]
   contacts ContactLog[]
+  progress PromoProgress[]
+  awards   PromoAward[]
+  alerts   Alert[]
 
   @@unique([brandId, name])
 }
@@ -331,16 +357,21 @@ model PromoClaim {
 }
 
 model ContactLog {
-  id          Int      @id @default(autoincrement())
-  playerId    Int
-  staffId     Int
-  channel     String   @db.VarChar(40)
-  promotionId Int?
-  bonus       Decimal  @default(0) @db.Decimal(12, 2)
-  contactedAt DateTime
-  replied     Boolean  @default(false)
-  result      String?  @db.VarChar(255)
-  createdAt   DateTime @default(now())
+  id           Int       @id @default(autoincrement())
+  playerId     Int
+  staffId      Int
+  channel      String    @db.VarChar(40)
+  promotionId  Int?
+  bonus        Decimal   @default(0) @db.Decimal(12, 2)
+  contactedAt  DateTime
+  replied      Boolean   @default(false)
+  result       String?   @db.VarChar(255)
+  /// The message CS sent the player.
+  message      String?   @db.Text
+  /// First deposit after this contact within the return window (filled in automatically).
+  recalledAt   DateTime?
+  recallAmount Decimal?  @db.Decimal(14, 2)
+  createdAt    DateTime  @default(now())
 
   player    Player     @relation(fields: [playerId], references: [id], onDelete: Cascade)
   staff     User       @relation(fields: [staffId], references: [id])
@@ -348,6 +379,92 @@ model ContactLog {
 
   @@index([playerId, contactedAt])
   @@index([staffId, contactedAt])
+}
+
+// ---------- promotion tracking & alerts ----------
+
+/// One player's deposits towards one tracked promotion in one period (a day, week, month or the whole campaign).
+model PromoProgress {
+  id          Int      @id @default(autoincrement())
+  promotionId Int
+  playerId    Int
+  brandId     Int
+  /// First business day of the period, e.g. "2026-10-27".
+  periodKey   String   @db.VarChar(10)
+  periodEnd   DateTime
+  amount      Decimal  @db.Decimal(14, 2)
+  /// Deposits that count (each at least the rule's minimum).
+  count       Int
+  /// How many tiers are reached.
+  reached     Int
+  updatedAt   DateTime @updatedAt
+
+  promotion Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  player    Player    @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([promotionId, playerId, periodKey])
+  @@index([promotionId, periodKey])
+  @@index([playerId])
+}
+
+/// A bonus a player qualified for: one row per tier reached in a period.
+model PromoAward {
+  id          Int       @id @default(autoincrement())
+  promotionId Int
+  playerId    Int
+  brandId     Int
+  periodKey   String    @db.VarChar(10)
+  /// 0 = first tier.
+  tier        Int
+  bonus       Decimal   @db.Decimal(12, 2)
+  eligibleAt  DateTime
+  expiresAt   DateTime?
+  claimedAt   DateTime?
+  claimId     Int?      @unique
+  createdAt   DateTime  @default(now())
+
+  promotion Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  player    Player    @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([promotionId, playerId, periodKey, tier])
+  @@index([promotionId, eligibleAt])
+  @@index([playerId])
+  @@index([claimedAt, expiresAt])
+}
+
+/// Something CS should act on. `key` keeps one alert per thing, so nobody is told twice.
+model Alert {
+  id          Int       @id @default(autoincrement())
+  key         String    @unique @db.VarChar(120)
+  kind        AlertKind
+  brandId     Int
+  playerId    Int
+  promotionId Int?
+  periodKey   String?   @db.VarChar(10)
+  awardId     Int?
+  contactId   Int?
+  /// Who it's for; null = everyone handling this brand.
+  staffId     Int?
+  /// Figures shown in the alert (progress, what's missing, bonus…).
+  data        Json
+  /// When it (last) popped up.
+  raisedAt    DateTime  @default(now())
+  /// Closes by itself after this (end of the period, bonus expiry).
+  until       DateTime?
+  doneAt      DateTime?
+  doneById    Int?
+  /// contacted · claimed · dismissed · auto (the system closed it)
+  outcome     String?   @db.VarChar(20)
+  createdAt   DateTime  @default(now())
+
+  player    Player     @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  promotion Promotion? @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  doneBy    User?      @relation("AlertDoneBy", fields: [doneById], references: [id], onDelete: SetNull)
+
+  @@index([doneAt, brandId, raisedAt])
+  @@index([staffId, doneAt])
+  @@index([playerId, kind])
+  @@index([promotionId, kind, createdAt])
 }
 
 // ---------- shareholders ----------

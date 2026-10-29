@@ -19,6 +19,7 @@ async function csUser(min: 2 | 3) {
 }
 
 function revalidate() {
+  revalidatePath("/alerts");
   revalidatePath("/churn");
   revalidatePath("/cs");
   revalidatePath("/players", "layout");
@@ -67,7 +68,13 @@ export async function logContact(_p: Result, fd: FormData) {
         contactedAt: /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(time) ? fromLocalInput(time) : new Date(),
         replied: fd.get("replied") === "on",
         result: str(fd, "result").slice(0, 250) || null,
+        message: str(fd, "message").slice(0, 5000) || null,
       },
+    });
+    // The player has been followed up: their open alerts are handled (a bonus about to expire still reminds later).
+    await prisma.alert.updateMany({
+      where: { playerId, doneAt: null, kind: { in: ["NEAR", "ELIGIBLE", "REFOLLOW", "RECALLED"] } },
+      data: { doneAt: new Date(), doneById: user.id, outcome: "contacted" },
     });
     // Whoever follows up a player who has no owner becomes their CS.
     if (!player.assignedToId) await prisma.player.update({ where: { id: playerId }, data: { assignedToId: user.id } });

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { MessageField } from "@/components/message-field";
 import { Prisma } from "@prisma/client";
 import { ActionButton, ActionForm, AutoSelect, Dialog, Submit } from "@/components/client";
 import { RangeBar } from "@/components/range";
@@ -75,6 +76,7 @@ export default async function CsPage({ searchParams }: { searchParams: Promise<R
                 <label className="flex items-center gap-2 text-sm text-ink-2">
                   <input type="checkbox" name="confirmDup" className="h-4 w-4" /> {t("Log even if another CS contacted them recently")}
                 </label>
+                <MessageField templates={settings.csTemplates} />
                 <Field label={t("Result / note")}>
                   <input name="result" className="input" maxLength={250} />
                 </Field>
@@ -96,7 +98,7 @@ export default async function CsPage({ searchParams }: { searchParams: Promise<R
         <RangeBar path="/cs" range={range} params={{ ...sp, tab }} />
       </div>
       {tab === "performance" ? (
-        <Performance brandIds={scope.brandIds} range={range} recallDays={settings.recallDays} rate={scope.rate} currency={scope.currency} t={t} />
+        <Performance brandIds={scope.brandIds} range={range} recallDays={settings.recallDays} recallMin={settings.recallMinAmount} rate={scope.rate} currency={scope.currency} brandName={scope.brandName} t={t} />
       ) : (
         <Log sp={sp} brandIds={scope.brandIds} range={range} may={rights.may} note={rights.note} brandCurrency={scope.brandCurrency} t={t} />
       )}
@@ -110,15 +112,19 @@ async function Performance({
   brandIds,
   range,
   recallDays,
+  recallMin,
   rate,
   currency,
+  brandName,
   t,
 }: {
   brandIds: number[];
   range: { from: string; to: string };
   recallDays: number;
+  recallMin: number;
   rate: (id: number) => number;
   currency: string;
+  brandName: (id: number) => string;
   t: T;
 }) {
   if (!brandIds.length) return null;
@@ -126,7 +132,7 @@ async function Performance({
     SELECT c.id, c.staffId, c.playerId, c.channel, c.replied, c.bonus, p.brandId,
       DATE_FORMAT(DATE_ADD(c.contactedAt, INTERVAL 8 HOUR), '%Y-%m-%d') AS d,
       (SELECT COALESCE(SUM(t.amount), 0) FROM \`Txn\` t
-        WHERE t.playerId = c.playerId AND t.type = 'DEPOSIT' AND t.txnAt > c.contactedAt AND t.txnAt <= DATE_ADD(c.contactedAt, INTERVAL ${recallDays} DAY)) AS dep
+        WHERE t.playerId = c.playerId AND t.type = 'DEPOSIT' AND t.amount >= ${recallMin} AND t.txnAt > c.contactedAt AND t.txnAt <= DATE_ADD(c.contactedAt, INTERVAL ${recallDays} DAY)) AS dep
     FROM \`ContactLog\` c JOIN \`Player\` p ON p.id = c.playerId
     WHERE p.brandId IN (${Prisma.join(brandIds)}) AND c.contactedAt >= ${dayStart(range.from)} AND c.contactedAt < ${dayStart(addDays(range.to, 1))}`;
   if (rows.length === 0)
@@ -139,6 +145,7 @@ async function Performance({
   const users = new Map((await prisma.user.findMany({ select: { id: true, name: true } })).map((u) => [u.id, u.name]));
   const byStaff = new Map<number, Agg>();
   const byChannel = new Map<string, Agg>();
+  const byBrand = new Map<number, Agg>();
   const daily = new Map<string, number>();
   // Deposits are counted once per staff + player (their best window), so contacting someone twice doesn't double it.
   const best = new Map<string, number>();
@@ -155,12 +162,13 @@ async function Performance({
     const bonus = n(r.bonus as number) * rate(r.brandId);
     byStaff.set(r.staffId, add(byStaff.get(r.staffId) ?? agg(), r, dep, bonus));
     byChannel.set(r.channel, add(byChannel.get(r.channel) ?? agg(), r, dep, bonus));
-    for (const k of [`s${r.staffId}|${r.playerId}`, `c${r.channel}|${r.playerId}`]) best.set(k, Math.max(best.get(k) ?? 0, dep));
+    byBrand.set(r.brandId, add(byBrand.get(r.brandId) ?? agg(), r, dep, bonus));
+    for (const k of [`s${r.staffId}|${r.playerId}`, `c${r.channel}|${r.playerId}`, `b${r.brandId}|${r.playerId}`]) best.set(k, Math.max(best.get(k) ?? 0, dep));
     daily.set(`${r.staffId}|${r.d}`, (daily.get(`${r.staffId}|${r.d}`) ?? 0) + 1);
   }
   for (const [k, v] of best) {
     const [key] = k.slice(1).split("|");
-    const a = k[0] === "s" ? byStaff.get(Number(key)) : byChannel.get(key);
+    const a = k[0] === "s" ? byStaff.get(Number(key)) : k[0] === "b" ? byBrand.get(Number(key)) : byChannel.get(key);
     if (a) a.deposits += v;
   }
 
@@ -208,6 +216,7 @@ async function Performance({
   return (
     <div className="space-y-5">
       {table(t("By CS"), staffRows.map(([id, a]) => [users.get(id) ?? `#${id}`, a]), t("Staff"))}
+      {byBrand.size > 1 && table(t("By brand"), [...byBrand.entries()].sort((a, b) => b[1].players.size - a[1].players.size).map(([id, a]) => [brandName(id), a]), t("Brand"))}
       {table(t("By channel"), [...byChannel.entries()].sort((a, b) => b[1].contacts - a[1].contacts), t("Channel"))}
       <Card flush title={t("Contacts per day")} note={days.length < allDaysOf(range).length ? t("Last 31 days of the period") : undefined}>
         <TableWrap>

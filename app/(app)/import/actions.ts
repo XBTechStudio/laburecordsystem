@@ -9,6 +9,7 @@ import { fromLocalInput } from "@/lib/dates";
 import { prisma } from "@/lib/db";
 import { getT } from "@/lib/i18n-server";
 import { ensurePlayers, refreshPlayerStats } from "@/lib/players";
+import { linkClaims, safely, trackPlayers, unlinkClaims } from "@/lib/promo-engine";
 
 /** Rows arrive already normalised by the browser: times as "YYYY-MM-DDTHH:mm" (Malaysia), dates as "YYYY-MM-DD", amounts as numbers. */
 export type ImportRow = {
@@ -141,6 +142,7 @@ export async function importChunk(batchId: number, rows: ImportRow[], offset: nu
       inserted = r.count;
       skipped = ok.length - r.count;
       await refreshPlayerStats(playerIds);
+      await safely("import", () => trackPlayers(playerIds, fresh.map((d) => d.txnAt)));
     }
 
     if (kind === "claim") {
@@ -179,6 +181,7 @@ export async function importChunk(batchId: number, rows: ImportRow[], offset: nu
       const have = new Set(existing.map(key));
       const fresh = data.filter((d) => !have.has(key(d)));
       inserted = (await prisma.promoClaim.createMany({ data: fresh })).count;
+      await safely("import claims", () => linkClaims({ importId: batchId }));
       skipped = ok.length - inserted;
     }
 
@@ -211,10 +214,13 @@ export async function undoImport(_p: Result, fd: FormData) {
     need(!b.undoneAt, "This import was already undone.");
     let removed = 0;
     if (b.kind === "txn") {
-      const affected = await prisma.txn.findMany({ where: { importId: id }, select: { playerId: true }, distinct: ["playerId"] });
+      const affected = await prisma.txn.findMany({ where: { importId: id }, select: { playerId: true, txnAt: true } });
       removed = (await prisma.txn.deleteMany({ where: { importId: id } })).count;
-      await refreshPlayerStats(affected.map((a) => a.playerId));
+      const pids = [...new Set(affected.map((a) => a.playerId))];
+      await refreshPlayerStats(pids);
+      await safely("undo import", () => trackPlayers(pids, affected.map((a) => a.txnAt)));
     } else if (b.kind === "claim") {
+      await safely("undo claims", () => unlinkClaims({ importId: id }));
       removed = (await prisma.promoClaim.deleteMany({ where: { importId: id } })).count;
     }
     // Players created by this import go too, unless something else now refers to them.
