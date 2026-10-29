@@ -74,5 +74,15 @@
 ["Winnings the player can't withdraw yet (e.g. Daily FREE). Take them off the player on the platform first. A new promotion name becomes a Lucky Box promotion.","玩家暂时不能提的赢分（例如 Daily FREE）。请先在平台上扣掉玩家的分数。输入新的优惠名称会自动建成 Lucky Box 优惠。","Kemenangan yang belum bisa ditarik pemain (mis. Daily FREE). Kurangi poin pemain di platform dulu. Nama promosi baru menjadi promosi Lucky Box."],
 ["Withdrawal on {when} with a net win of {amount}","{when} 提款，净赢 {amount}","Penarikan pada {when} dengan net win {amount}"],
 ["withdrawal with a net win of {amount}+","提款净赢满 {amount}","penarikan dengan net win {amount}+"],
-["System","系统","Sistem"]
+["System","系统","Sistem"],
+["Ask an administrator (Staff & roles).","请联系管理员（员工与权限）。","Hubungi administrator (Staf & peran)."],
+["Deposits part of Data entry and Excel import (needs Data entry too)","数据录入和 Excel 导入里的充值部分（也要有数据录入权限）","Bagian deposit di Input data dan impor Excel (perlu izin Input data juga)"],
+["Withdrawals part of Data entry and Excel import (needs Data entry too)","数据录入和 Excel 导入里的提款部分（也要有数据录入权限）","Bagian penarikan di Input data dan impor Excel (perlu izin Input data juga)"],
+["Enter deposits","录入充值","Input deposit"],
+["Enter withdrawals","录入提款","Input penarikan"],
+["Your role may not enter deposits or withdrawals","你的角色不能录入充值或提款","Peran Anda tidak boleh menginput deposit atau penarikan"],
+["Your role may not enter deposits","你的角色不能录入充值","Peran Anda tidak boleh menginput deposit"],
+["Your role may not enter withdrawals","你的角色不能录入提款","Peran Anda tidak boleh menginput penarikan"],
+["your role may not enter deposits","你的角色不能录入充值","peran Anda tidak boleh menginput deposit"],
+["your role may not enter withdrawals","你的角色不能录入提款","peran Anda tidak boleh menginput penarikan"]
 ]

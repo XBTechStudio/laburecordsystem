@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { Prisma, type TxnType } from "@prisma/client";
-import { assertBrand, Denied, guard } from "@/lib/auth";
+import { assertBrand, can, Denied, guard } from "@/lib/auth";
+import { txnModule } from "@/lib/perms";
 import { audit } from "@/lib/audit";
 import { amount, int, need, run, str, UserError, type Result } from "@/lib/action";
 import { dateOnly, fromLocalInput, todayStr } from "@/lib/dates";
@@ -102,6 +103,7 @@ export async function saveBatch(kind: string, brandId: number, rows: Row[], defa
         const at = when(r.time, defaultDate);
         if (!r.player?.trim()) fail(i, "Player is missing");
         else if (!type) fail(i, "Choose Deposit or Withdrawal");
+        else if (!can(user, txnModule(type), 2)) fail(i, type === "DEPOSIT" ? "Your role may not enter deposits" : "Your role may not enter withdrawals");
         else if (!(amt > 0)) fail(i, "Amount must be more than 0");
         else if (!at) fail(i, "Date/time isn't valid");
         return { username: r.player?.trim() ?? "", type: type as TxnType, amount: amt, txnAt: at!, channelId: Number(r.channel) || null, ref: r.ref?.trim() || null, note: r.note?.trim() || null, payBank: r.payBank?.trim().slice(0, 80) || null, payAccount: r.payAccount?.trim().slice(0, 60) || null };
@@ -307,6 +309,7 @@ export async function deleteEntry(_p: Result, fd: FormData) {
     if (kind === "txn") {
       const t = await prisma.txn.findUniqueOrThrow({ where: { id }, include: { player: true } });
       const user = await mayChange(t.createdById, t.createdAt, t.brandId);
+      if (!can(user, txnModule(t.type), 2)) throw new Denied(t.type === "DEPOSIT" ? "Your role may not enter deposits" : "Your role may not enter withdrawals");
       await prisma.txn.delete({ where: { id } });
       await refreshPlayerStats([t.playerId]);
       await safely("delete", () => trackPlayers([t.playerId], [t.txnAt]));
@@ -356,6 +359,8 @@ export async function updateEntry(_p: Result, fd: FormData) {
     if (kind === "txn") {
       const t = await prisma.txn.findUniqueOrThrow({ where: { id } });
       const user = await mayChange(t.createdById, t.createdAt, t.brandId);
+      const newType = str(fd, "type") === "WITHDRAW" ? "WITHDRAW" : "DEPOSIT";
+      for (const ty of new Set([t.type, newType])) if (!can(user, txnModule(ty), 2)) throw new Denied(ty === "DEPOSIT" ? "Your role may not enter deposits" : "Your role may not enter withdrawals");
       const data = {
         type: str(fd, "type") === "WITHDRAW" ? ("WITHDRAW" as const) : ("DEPOSIT" as const),
         amount: pos(str(fd, "amount")),

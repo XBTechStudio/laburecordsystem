@@ -3,6 +3,7 @@ import { AutoSelect } from "@/components/client";
 import { RangeBar } from "@/components/range";
 import { Card, Chip, Empty, PageHeader, Pager, TableWrap } from "@/components/ui";
 import { can, requirePage } from "@/lib/auth";
+import { txnModule } from "@/lib/perms";
 import { prisma } from "@/lib/db";
 import { editRights } from "@/lib/edit-rights";
 import { count, dt, money, n } from "@/lib/format";
@@ -210,7 +211,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
                       </div>
                     </td>
                     {canEdit && (
-                      <EditCell kind="txn" id={tx.id} label={t("transaction")} allowed={rights.may(tx.createdById, tx.createdAt)} t={t}>
+                      <EditCell kind="txn" id={tx.id} label={t("transaction")} allowed={rights.may(tx.createdById, tx.createdAt) && can(user, txnModule(tx.type), 2)} t={t}>
                         <TxnFields tx={tx} channels={chOpts} t={t} />
                       </EditCell>
                     )}

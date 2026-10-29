@@ -3,7 +3,8 @@ import type { ReactNode } from "react";
 import { BatchEntry, type Col } from "@/components/batch-entry";
 import { AutoSelect } from "@/components/client";
 import { Card, Chip, Empty, Field, PageHeader, TableWrap, Tabs } from "@/components/ui";
-import { requirePage, type CurrentUser } from "@/lib/auth";
+import { can, requirePage, type CurrentUser } from "@/lib/auth";
+import { txnModule } from "@/lib/perms";
 import { dayStart, addDays, toLocalInput, todayStr } from "@/lib/dates";
 import { prisma } from "@/lib/db";
 import { editRights } from "@/lib/edit-rights";
@@ -98,28 +99,56 @@ export default async function EntryPage({ searchParams }: { searchParams: Promis
     player: t("Existing usernames are updated with the phone/name/note you enter."),
   };
 
+  const shown = (c: Col[]) => (settings.entry.pickTime ? c : c.filter((x) => x.key !== "time"));
+  const brands = scope.brands.map((b) => ({ id: b.id, name: b.name, currency: b.currency }));
+  const brandId = scope.current?.id ?? (scope.brands.length === 1 ? scope.brands[0].id : null);
+  // Deposits and withdrawals have a form each (staff may be allowed only one of them); withdrawals also take the player's bank.
+  const txnCols = (type: "DEPOSIT" | "WITHDRAW") => shown(cols.txn.filter((c) => c.key !== "type" && (type === "WITHDRAW" || (c.key !== "payBank" && c.key !== "payAccount"))));
+  const txnForms = (
+    [
+      ["DEPOSIT", "deposits", t("Deposits")],
+      ["WITHDRAW", "withdrawals", t("Withdrawals")],
+    ] as const
+  ).filter(([, m]) => can(user, m, 2));
+
   return (
     <Shell kind={kind} t={t}>
-      <BatchEntry
-        key={kind}
-        kind={kind}
-        cols={settings.entry.pickTime ? cols[kind] : cols[kind].filter((c) => c.key !== "time")}
-        carryBrand={settings.entry.carryBrand}
-        brands={scope.brands.map((b) => ({ id: b.id, name: b.name, currency: b.currency }))}
-        brandId={scope.current?.id ?? (scope.brands.length === 1 ? scope.brands[0].id : null)}
-        save={saveBatch}
-        loadLists={loadLists}
-        note={notes[kind]}
-        totals={
-          kind === "txn"
-            ? [{ col: "amount", label: "", split: { by: "type", values: { DEPOSIT: t("Deposits"), WITHDRAW: t("Withdrawals") } } }]
-            : kind === "claim"
-              ? [{ col: "amount", label: t("Bonus") }]
-              : kind === "box"
-              ? [{ col: "amount", label: t("Lucky Box") }]
-              : []
-        }
-      />
+      {kind === "txn" && txnForms.length === 0 && (
+        <Card>
+          <Empty title={t("Your role may not enter deposits or withdrawals")}>{t("Ask an administrator (Staff & roles).")}</Empty>
+        </Card>
+      )}
+      {kind === "txn" &&
+        txnForms.map(([type, , title]) => (
+          <BatchEntry
+            key={type}
+            kind="txn"
+            title={title}
+            fixed={{ type }}
+            cols={txnCols(type)}
+            carryBrand={settings.entry.carryBrand}
+            brands={brands}
+            brandId={brandId}
+            save={saveBatch}
+            loadLists={loadLists}
+            note={notes.txn}
+            totals={[{ col: "amount", label: title }]}
+          />
+        ))}
+      {kind !== "txn" && (
+        <BatchEntry
+          key={kind}
+          kind={kind}
+          cols={shown(cols[kind])}
+          carryBrand={settings.entry.carryBrand}
+          brands={brands}
+          brandId={brandId}
+          save={saveBatch}
+          loadLists={loadLists}
+          note={notes[kind]}
+          totals={kind === "claim" ? [{ col: "amount", label: t("Bonus") }] : kind === "box" ? [{ col: "amount", label: t("Lucky Box") }] : []}
+        />
+      )}
       <Recent user={user} kind={kind} sp={sp} brandIds={scope.brandIds} channels={chOpts} brandCurrency={scope.brandCurrency} brandName={scope.brandName} multi={!scope.current} />
     </Shell>
   );
@@ -226,7 +255,7 @@ async function Recent({
               {everyone && <td className="whitespace-nowrap text-ink-2">{tx.createdBy?.name ?? "–"}</td>}
               {actions(
                 tx.id,
-                canChange(tx.createdById, tx.createdAt),
+                canChange(tx.createdById, tx.createdAt) && can(user, txnModule(tx.type), 2),
                 <TxnFields tx={tx} channels={channels} t={t} />,
                 t("transaction"),
               )}

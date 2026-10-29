@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { Prisma, type TxnType } from "@prisma/client";
-import { assertBrand, Denied, guard } from "@/lib/auth";
+import { assertBrand, can, Denied, guard } from "@/lib/auth";
+import { txnModule } from "@/lib/perms";
 import { audit } from "@/lib/audit";
 import { int, need, run, str, UserError, type Result } from "@/lib/action";
 import { fromLocalInput } from "@/lib/dates";
@@ -112,6 +113,7 @@ export async function importChunk(batchId: number, rows: ImportRow[], offset: nu
         .filter(({ r, i }) => {
           if (!r.username?.trim()) return bad(i, "no username"), false;
           if (r.type !== "DEPOSIT" && r.type !== "WITHDRAW") return bad(i, "type is not deposit or withdrawal"), false;
+          if (!can(user, txnModule(r.type), 2)) return bad(i, r.type === "DEPOSIT" ? "your role may not enter deposits" : "your role may not enter withdrawals"), false;
           if (!(Number(r.amount) > 0)) return bad(i, "amount missing or 0"), false;
           if (!r.time || !TIME.test(r.time)) return bad(i, "date/time not recognised"), false;
           return true;

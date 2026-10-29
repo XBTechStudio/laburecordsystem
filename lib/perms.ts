@@ -15,6 +15,8 @@ export type Level = 0 | 1 | 2 | 3;
 export const MODULES = [
   { key: "dashboard", href: "/", label: tk("Dashboard"), levels: [0, 1], hint: tk("Overview numbers and alerts") },
   { key: "entry", href: "/entry", label: tk("Data entry"), levels: [0, 2, 3], hint: tk("Add = enter data · Full = change or delete saved entries") },
+  { key: "deposits", href: "/entry", label: tk("Enter deposits"), levels: [0, 2], hint: tk("Deposits part of Data entry and Excel import (needs Data entry too)") },
+  { key: "withdrawals", href: "/entry", label: tk("Enter withdrawals"), levels: [0, 2], hint: tk("Withdrawals part of Data entry and Excel import (needs Data entry too)") },
   { key: "import", href: "/import", label: tk("Excel import"), levels: [0, 2, 3], hint: tk("Full = undo imports and manage templates") },
   { key: "transactions", href: "/transactions", label: tk("Transactions"), levels: [0, 1], hint: tk("Every deposit and withdrawal, with who entered it") },
   { key: "reports", href: "/reports", label: tk("Reports"), levels: [0, 1, 3], hint: tk("Full = save reports for the whole team") },
@@ -34,6 +36,9 @@ export const MODULES = [
 ] as const;
 
 export type Module = (typeof MODULES)[number]["key"];
+
+/** The permission that lets someone enter (and fix) a deposit or a withdrawal. */
+export const txnModule = (type: string) => (type === "WITHDRAW" ? ("withdrawals" as const) : ("deposits" as const));
 export type Perms = Partial<Record<Module, Level>>;
 
 export function levelOf(perms: Perms, m: Module): Level {
@@ -41,6 +46,8 @@ export function levelOf(perms: Perms, m: Module): Level {
   if (m === "alerts" && perms.alerts === undefined) return Math.max(perms.churn ?? 0, perms.cs ?? 0) as Level;
   // …and Lucky Box at the level they have for alerts (CS release the boxes they are told about).
   if (m === "luckybox" && perms.luckybox === undefined) return levelOf(perms, "alerts");
+  // Roles saved before deposits and withdrawals could be split may enter both, if they may enter data.
+  if ((m === "deposits" || m === "withdrawals") && perms[m] === undefined) return (levelOf(perms, "entry") >= 2 ? 2 : 0) as Level;
   return (perms[m] ?? 0) as Level;
 }
 

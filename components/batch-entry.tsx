@@ -43,6 +43,8 @@ export function BatchEntry({
   totals,
   note,
   carryBrand = false,
+  title,
+  fixed,
 }: {
   kind: string;
   cols: Col[];
@@ -55,6 +57,10 @@ export function BatchEntry({
   note?: string;
   /** A brand picked on a row fills the empty rows below, and new rows take the brand of the row above. Off = every row starts empty. */
   carryBrand?: boolean;
+  /** Heading of the form, e.g. "Deposits" when the page has several. */
+  title?: string;
+  /** Values sent with every row, e.g. { type: "DEPOSIT" } for a deposits-only form. */
+  fixed?: Row;
 }) {
   const router = useRouter();
   const t = useT();
@@ -177,7 +183,7 @@ export function BatchEntry({
       const saved = new Set<number>();
       const messages: string[] = [];
       for (const [b, part] of groups) {
-        const res = await save(kind, b, part.map(({ r }) => Object.fromEntries(Object.entries(r).filter(([k]) => k !== "brand"))), defaultDate);
+        const res = await save(kind, b, part.map(({ r }) => ({ ...Object.fromEntries(Object.entries(r).filter(([k]) => k !== "brand")), ...fixed })), defaultDate);
         if (!res.ok) {
           setRows((rs) => keep(rs, saved));
           // Map errors back from "position within this brand's rows" to grid row index (after the saved rows are gone).
@@ -221,6 +227,7 @@ export function BatchEntry({
   return (
     <div className="card">
       <div className="flex flex-wrap items-end gap-3 border-b border-line p-4">
+        {title && <h2 className="w-full text-base font-semibold">{title}</h2>}
         {hasTime && (
           <label className="block">
             <span className="label">{t("Default date")}</span>
