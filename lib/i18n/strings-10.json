@@ -193,5 +193,6 @@
 ["Your role doesn't receive alerts (Settings → Alerts).","你的角色不接收提醒（设置 → 提醒）。","Peran Anda tidak menerima peringatan (Pengaturan → Peringatan)."],
 ["Add a tier","加一档","Tambah tingkat"],
 ["Remove this tier","删除这一档","Hapus tingkat ini"],
-["never again","不再提醒","tidak lagi"]
+["never again","不再提醒","tidak lagi"],
+["Rows without a time: today = the time you save, another date = 12:00.","没填时间的行：默认日期是今天就用保存的时间，是别的日期就用当天 12:00。","Baris tanpa jam: hari ini = jam saat disimpan, tanggal lain = 12:00."]
 ]

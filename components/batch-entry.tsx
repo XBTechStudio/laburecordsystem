@@ -55,25 +55,37 @@ export function BatchEntry({
 }) {
   const router = useRouter();
   const t = useT();
-  const [brandId, setBrandId] = useState<number | null>(initialBrand);
-  const [rows, setRows] = useState<Row[]>(() => Array.from({ length: 6 }, () => blank(cols)));
+  // With more than one brand, every row picks its own brand (first column); a new row takes the brand of the row above.
+  const perRow = brands.length > 1;
+  const single = brands.length === 1 ? brands[0].id : null;
+  const brandCol: Col = { key: "brand", label: t("Brand"), type: "select", required: true, width: "9rem", options: brands.map((b) => ({ value: String(b.id), label: b.name })) };
+  const allCols = perRow ? [brandCol, ...cols] : cols;
+  const fresh = (brand: number | null): Row => ({ ...blank(cols), brand: brand ? String(brand) : "" });
+  const firstBrand = initialBrand ?? single;
+  const [rows, setRows] = useState<Row[]>(() => Array.from({ length: 6 }, () => fresh(firstBrand)));
   const [defaultDate, setDefaultDate] = useState(nowLocal);
-  const [lists, setLists] = useState<Record<string, string[]>>({});
+  const [lists, setLists] = useState<Record<number, Record<string, string[]>>>({});
   const [result, setResult] = useState<BatchResult | null>(null);
   const [pending, start] = useTransition();
   const table = useRef<HTMLTableElement>(null);
-  const brand = brands.find((b) => b.id === brandId);
+  const rowBrand = (r: Row) => Number(r.brand) || single;
+  const lastBrand = (rs: Row[]) => rowBrand(rs[rs.length - 1] ?? {}) ?? firstBrand;
 
+  const usedBrands = useMemo(() => [...new Set(rows.map(rowBrand).filter((b): b is number => !!b))], [rows]); // eslint-disable-line react-hooks/exhaustive-deps
+  const missing = usedBrands.filter((b) => !lists[b]).join(",");
   useEffect(() => {
-    if (!brandId) return;
+    if (!missing) return;
     let live = true;
-    loadLists(kind, brandId).then((l) => live && setLists(l));
+    for (const b of missing.split(",").map(Number)) loadLists(kind, b).then((l) => live && setLists((x) => ({ ...x, [b]: l })));
     return () => {
       live = false;
     };
-  }, [brandId, kind, loadLists]);
+  }, [missing, kind, loadLists]);
 
-  const players = useMemo(() => new Set((lists.players ?? []).map((p) => p.toLowerCase())), [lists]);
+  const players = useMemo(() => Object.fromEntries(Object.entries(lists).map(([b, l]) => [b, new Set((l.players ?? []).map((p) => p.toLowerCase()))])), [lists]) as Record<
+    number,
+    Set<string>
+  >;
 
   const cellError = (r: Row, c: Col): string | null => {
     const v = (r[c.key] ?? "").trim();
@@ -83,11 +95,12 @@ export function BatchEntry({
     return null;
   };
   const filled = rows.map((r, i) => ({ r, i })).filter(({ r }) => !isEmpty(r, cols));
-  const invalid = filled.filter(({ r }) => cols.some((c) => cellError(r, c)));
+  const invalid = filled.filter(({ r }) => allCols.some((c) => cellError(r, c)));
   const serverErr = new Map((result?.errors ?? []).map((e) => [e.i, e.msg]));
 
   const setCell = (i: number, key: string, v: string) => {
-    setRows((rs) => rs.map((r, j) => (j === i ? { ...r, [key]: v } : r)));
+    // A brand picked on one row carries down to the empty rows below it.
+    setRows((rs) => rs.map((r, j) => (j === i || (key === "brand" && j > i && isEmpty(r, cols)) ? { ...r, [key]: v } : r)));
     if (result) setResult(null);
   };
 
@@ -126,10 +139,10 @@ export function BatchEntry({
       const next = [...rs];
       lines.forEach((line, li) => {
         const at = i + li;
-        while (next.length <= at) next.push(blank(cols));
+        while (next.length <= at) next.push(fresh(lastBrand(next)));
         const row = { ...next[at] };
         line.split("\t").forEach((cell, k) => {
-          const c = cols[ci + k];
+          const c = allCols[ci + k];
           if (c) row[c.key] = normalise(c, cell);
         });
         next[at] = row;
@@ -146,28 +159,50 @@ export function BatchEntry({
   const onKey = (i: number, ci: number) => (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      if (i === rows.length - 1) setRows((rs) => [...rs, blank(cols)]);
+      if (i === rows.length - 1) setRows((rs) => [...rs, fresh(lastBrand(rs))]);
       setTimeout(() => focusCell(i + 1, ci));
     }
   };
 
   const submit = () => {
-    if (!brandId) return setResult({ ok: false, message: t("Choose which brand these entries are for.") });
     if (!filled.length) return setResult({ ok: false, message: t("Nothing to save yet — fill in at least one row.") });
+    if (filled.some(({ r }) => !rowBrand(r))) return setResult({ ok: false, message: t("Choose which brand these entries are for.") });
     if (invalid.length) return setResult({ ok: false, message: t("{n} rows need fixing (marked in red).", { n: invalid.length }) });
     start(async () => {
-      const payload = filled.map(({ r }) => r);
-      const res = await save(kind, brandId, payload, defaultDate);
-      if (res.ok) {
-        setRows(Array.from({ length: 6 }, () => blank(cols)));
-        setResult(res);
-        loadLists(kind, brandId).then(setLists);
-        router.refresh();
-      } else {
-        // Map errors back from "position among filled rows" to grid row index.
-        setResult({ ...res, errors: res.errors?.map((e) => ({ i: filled[e.i]?.i ?? e.i, msg: e.msg })) });
+      // One save per brand, in the order the brands first appear. A failing brand stops there; the brands before it are saved.
+      const groups = new Map<number, typeof filled>();
+      for (const f of filled) groups.set(rowBrand(f.r)!, [...(groups.get(rowBrand(f.r)!) ?? []), f]);
+      const saved = new Set<number>();
+      const messages: string[] = [];
+      for (const [b, part] of groups) {
+        const res = await save(kind, b, part.map(({ r }) => Object.fromEntries(Object.entries(r).filter(([k]) => k !== "brand"))), defaultDate);
+        if (!res.ok) {
+          setRows((rs) => keep(rs, saved));
+          // Map errors back from "position within this brand's rows" to grid row index (after the saved rows are gone).
+          const left = filled.filter(({ i }) => !saved.has(i));
+          const at = (gi: number) => left.findIndex((f) => f.i === gi);
+          setResult({
+            ...res,
+            message: [...messages, (groups.size > 1 ? `${brands.find((x) => x.id === b)?.name}: ` : "") + res.message].join(" "),
+            errors: res.errors?.map((e) => ({ i: at(part[e.i]?.i ?? -1), msg: e.msg })),
+          });
+          if (saved.size) router.refresh();
+          return;
+        }
+        part.forEach(({ i }) => saved.add(i));
+        messages.push((groups.size > 1 ? `${brands.find((x) => x.id === b)?.name}: ` : "") + res.message);
+        loadLists(kind, b).then((l) => setLists((x) => ({ ...x, [b]: l })));
       }
+      setRows((rs) => keep(rs, saved));
+      setResult({ ok: true, message: messages.join(" ") });
+      router.refresh();
     });
+  };
+  /** Drops saved rows and empty rows, keeping unsaved ones on top, padded back to 6 rows. */
+  const keep = (rs: Row[], saved: Set<number>) => {
+    const left = rs.filter((r, i) => !saved.has(i) && !isEmpty(r, cols));
+    const b = lastBrand(rs);
+    return [...left, ...Array.from({ length: Math.max(6 - left.length, 1) }, () => fresh(b))];
   };
 
   const sums = (totals ?? []).flatMap((t) => {
@@ -178,28 +213,12 @@ export function BatchEntry({
     });
   });
   const hasTime = cols.some((c) => c.type === "datetime" || c.type === "date");
+  const curs = [...new Set(filled.map(({ r }) => brands.find((b) => b.id === rowBrand(r))?.currency).filter(Boolean))];
+  const currency = curs.length === 1 ? curs[0] : null;
 
   return (
     <div className="card">
       <div className="flex flex-wrap items-end gap-3 border-b border-line p-4">
-        <label className="block">
-          <span className="label">{t("Brand")}</span>
-          <select
-            className="input w-48"
-            value={brandId ?? ""}
-            onChange={(e) => {
-              setBrandId(Number(e.target.value) || null);
-              setResult(null);
-            }}
-          >
-            <option value="">{t("Choose brand…")}</option>
-            {brands.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-          </select>
-        </label>
         {hasTime && (
           <label className="block">
             <span className="label">{t("Default date")}</span>
@@ -208,7 +227,7 @@ export function BatchEntry({
         )}
         <p className="min-w-60 flex-1 text-xs text-ink-2">
           {note ?? t("Type or paste rows straight from Excel.")} {t("Press Enter to go to the next row.")}
-          {hasTime && " " + t("Rows without a date use the default date.")} {t("Empty rows are ignored.")}
+          {hasTime && " " + t("Rows without a time: today = the time you save, another date = 12:00.")} {t("Empty rows are ignored.")}
         </p>
       </div>
 
@@ -217,7 +236,7 @@ export function BatchEntry({
           <thead>
             <tr className="bg-surface-2/60 text-left text-xs text-ink-2">
               <th className="w-10 px-2 py-2 text-center font-normal">#</th>
-              {cols.map((c) => (
+              {allCols.map((c) => (
                 <th key={c.key} className="px-1 py-2 font-medium whitespace-nowrap" style={{ minWidth: c.width ?? "8rem" }}>
                   {c.label}
                   {c.required && <span className="text-critical-ink"> *</span>}
@@ -230,10 +249,11 @@ export function BatchEntry({
             {rows.map((r, i) => {
               const empty = isEmpty(r, cols);
               const rowErr = serverErr.get(i);
+              const rb = rowBrand(r);
               return (
                 <tr key={i} className={`border-t border-line ${rowErr ? "bg-critical-soft/60" : ""}`}>
                   <td className="px-2 text-center text-xs text-muted">{i + 1}</td>
-                  {cols.map((c, ci) => {
+                  {allCols.map((c, ci) => {
                     const err = empty ? null : cellError(r, c);
                     const cls = `h-8 w-full rounded-md border bg-transparent px-2 text-sm outline-none focus:border-brand focus:bg-surface ${
                       err ? "border-critical bg-critical-soft/40" : "border-transparent hover:border-line"
@@ -250,7 +270,7 @@ export function BatchEntry({
                     if (c.type === "select") {
                       input = (
                         <select {...common} className={cls} onChange={(e) => setCell(i, c.key, e.target.value)}>
-                          {!c.required && <option value="">–</option>}
+                          {(!c.required || (c === brandCol && !r.brand)) && <option value="">{c === brandCol ? t("Choose brand…") : "–"}</option>}
                           {c.options?.map((o) => (
                             <option key={o.value} value={o.value}>
                               {o.label}
@@ -259,7 +279,7 @@ export function BatchEntry({
                         </select>
                       );
                     } else {
-                      const listId = c.type === "player" ? `dl-players` : c.type === "combo" ? `dl-${c.list}` : undefined;
+                      const listId = c.type === "player" ? `dl-players-${rb}` : c.type === "combo" ? `dl-${c.list}-${rb}` : undefined;
                       input = (
                         <input
                           {...common}
@@ -272,7 +292,7 @@ export function BatchEntry({
                         />
                       );
                     }
-                    const isNewPlayer = c.type === "player" && r[c.key]?.trim() && brandId && lists.players && !players.has(r[c.key].trim().toLowerCase());
+                    const isNewPlayer = c.type === "player" && r[c.key]?.trim() && rb && players[rb] && !players[rb].has(r[c.key].trim().toLowerCase());
                     return (
                       <td key={c.key} className="relative px-1 py-1">
                         {input}
@@ -290,7 +310,7 @@ export function BatchEntry({
                         type="button"
                         className="btn btn-ghost btn-sm text-muted"
                         aria-label={t("Clear row {n}", { n: i + 1 })}
-                        onClick={() => setRows((rs) => rs.map((x, j) => (j === i ? blank(cols) : x)))}
+                        onClick={() => setRows((rs) => rs.map((x, j) => (j === i ? fresh(rowBrand(x)) : x)))}
                       >
                         ✕
                       </button>
@@ -303,20 +323,24 @@ export function BatchEntry({
         </table>
       </div>
 
-      <datalist id="dl-players">
-        {(lists.players ?? []).slice(0, 5000).map((p) => (
-          <option key={p} value={p} />
-        ))}
-      </datalist>
-      {cols
-        .filter((c) => c.type === "combo")
-        .map((c) => (
-          <datalist key={c.key} id={`dl-${c.list}`}>
-            {(lists[c.list!] ?? []).map((p) => (
+      {usedBrands.map((b) => (
+        <div key={b} hidden>
+          <datalist id={`dl-players-${b}`}>
+            {(lists[b]?.players ?? []).slice(0, 5000).map((p) => (
               <option key={p} value={p} />
             ))}
           </datalist>
-        ))}
+          {cols
+            .filter((c) => c.type === "combo")
+            .map((c) => (
+              <datalist key={c.key} id={`dl-${c.list}-${b}`}>
+                {(lists[b]?.[c.list!] ?? []).map((p) => (
+                  <option key={p} value={p} />
+                ))}
+              </datalist>
+            ))}
+        </div>
+      ))}
 
       {result && !result.ok && result.errors?.length ? (
         <ul className="mx-4 mt-3 space-y-0.5 rounded-lg bg-critical-soft px-3 py-2 text-sm text-critical-ink">
@@ -330,7 +354,7 @@ export function BatchEntry({
       ) : null}
 
       <div className="flex flex-wrap items-center gap-3 p-4">
-        <button type="button" className="btn btn-sm" onClick={() => setRows((rs) => [...rs, ...Array.from({ length: 5 }, () => blank(cols))])}>
+        <button type="button" className="btn btn-sm" onClick={() => setRows((rs) => [...rs, ...Array.from({ length: 5 }, () => fresh(lastBrand(rs)))])}>
           + {t("5 rows")}
         </button>
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-2">
@@ -338,7 +362,7 @@ export function BatchEntry({
           {sums.map((s) => (
             <span key={s.label} className="tabular-nums">
               {s.label}: <b className="text-ink">{s.v.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</b>
-              {brand && <span className="text-muted"> {brand.currency}</span>}
+              {currency && <span className="text-muted"> {currency}</span>}
               {s.n !== filled.length && <span className="text-muted"> ({s.n})</span>}
             </span>
           ))}
