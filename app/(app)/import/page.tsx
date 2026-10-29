@@ -10,7 +10,7 @@ import { getScope } from "@/lib/scope";
 import { deleteTemplate, renameTemplate, undoImport } from "./actions";
 import { ImportWizard } from "./wizard";
 
-const KIND: Record<string, string> = { txn: tk("Deposits / withdrawals"), player: tk("Players"), claim: tk("Promotion claims"), flow: tk("PG / bank statement") };
+const KIND: Record<string, string> = { txn: tk("Deposits / withdrawals"), player: tk("Players"), claim: tk("Promotion claims"), box: tk("Lucky Box"), flow: tk("PG / bank statement") };
 
 export default async function ImportPage() {
   const user = await requirePage("import", 2);

@@ -21,6 +21,7 @@ async function main() {
     prisma.dividendRule.deleteMany(),
     prisma.shareholder.deleteMany(),
     prisma.alert.deleteMany(),
+    prisma.boxEntry.deleteMany(),
     prisma.promoAward.deleteMany(),
     prisma.promoProgress.deleteMany(),
     prisma.contactLog.deleteMany(),

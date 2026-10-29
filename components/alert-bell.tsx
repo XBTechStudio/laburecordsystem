@@ -15,6 +15,7 @@ const TONE: Record<AlertKindName, string> = {
   EXPIRING: "border-l-warning",
   RECALLED: "border-l-good",
   REFOLLOW: "border-l-[var(--line-strong)]",
+  BOX: "border-l-warning",
 };
 
 function beep() {

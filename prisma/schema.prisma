@@ -44,6 +44,17 @@ enum AlertKind {
   RECALLED
   /// Contacted a while ago and still no deposit.
   REFOLLOW
+  /// A Lucky Box's points can be released to the player.
+  BOX
+}
+
+enum BoxKind {
+  /// Points put into the box (e.g. a Daily FREE win).
+  IN
+  /// Points given back to the player.
+  RELEASE
+  /// Points that ran out unreleased.
+  EXPIRE
 }
 
 enum DividendPeriod {
@@ -86,6 +97,7 @@ model User {
 
   txnsEntered     Txn[]        @relation("TxnEnteredBy")
   claimsEntered   PromoClaim[] @relation("ClaimEnteredBy")
+  boxesEntered    BoxEntry[]   @relation("BoxEnteredBy")
   expensesEntered Expense[]    @relation("ExpenseEnteredBy")
 }
 
@@ -163,6 +175,7 @@ model Player {
   progress   PromoProgress[]
   awards     PromoAward[]
   alerts     Alert[]
+  boxes      BoxEntry[]
 
   @@unique([brandId, username])
   @@index([phoneKey])
@@ -328,10 +341,13 @@ model Promotion {
   /// Tracking runs between these days (inclusive); null = no limit.
   startDay  DateTime? @db.Date
   endDay    DateTime? @db.Date
+  /// Lucky Box release rules (see lib/box-rule.ts). null = not a Lucky Box promotion.
+  box       Json?
   createdAt DateTime  @default(now())
 
   brand    Brand           @relation(fields: [brandId], references: [id])
   claims   PromoClaim[]
+  boxes    BoxEntry[]
   contacts ContactLog[]
   progress PromoProgress[]
   awards   PromoAward[]
@@ -349,6 +365,8 @@ model PromoClaim {
   createdById Int?
   importId    Int?
   createdAt   DateTime @default(now())
+
+  boxRelease BoxEntry?
 
   promotion Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
   player    Player    @relation(fields: [playerId], references: [id], onDelete: Cascade)
@@ -617,4 +635,31 @@ model AuditLog {
   @@index([createdAt])
   @@index([entity, entityId])
   @@index([userId, createdAt])
+}
+
+/// Lucky Box ledger: points a player can't withdraw yet (IN), and what came out of the box (RELEASE, EXPIRE).
+/// Balance per player and promotion = IN − RELEASE − EXPIRE. A release is also recorded as a claim, so it counts as promotion cost.
+model BoxEntry {
+  id          Int      @id @default(autoincrement())
+  brandId     Int
+  playerId    Int
+  promotionId Int
+  kind        BoxKind
+  /// Always positive; the kind says which way it goes.
+  amount      Decimal  @db.Decimal(14, 2)
+  at          DateTime
+  note        String?  @db.VarChar(255)
+  claimId     Int?     @unique
+  createdById Int?
+  importId    Int?
+  createdAt   DateTime @default(now())
+
+  player    Player      @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  promotion Promotion   @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  claim     PromoClaim? @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  createdBy User?       @relation("BoxEnteredBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([playerId, promotionId, at])
+  @@index([brandId, at])
+  @@index([importId])
 }

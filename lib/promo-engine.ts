@@ -9,6 +9,7 @@ import { prisma } from "@/lib/db";
 import { n } from "@/lib/format";
 import { clip, inCampaign, nextPeriod, periodAt, type Campaign, type Period, type PeriodOpts } from "@/lib/promo-period";
 import { isNear, readRule, tierBonus, tierGap, tierMet, tierShare, type PromoRule } from "@/lib/promo-rule";
+import { boxPromos, expireBoxes, trackBoxes } from "@/lib/lucky-box";
 import { getSettings, type Settings } from "@/lib/settings";
 import { scorePlayer } from "@/lib/tiers";
 
@@ -30,6 +31,8 @@ export type AlertData = {
   depositAt?: string;
   contactAt?: string;
   channel?: string;
+  balance?: number;
+  netWin?: number;
 };
 
 type Tracked = { id: number; brandId: number; name: string; rule: PromoRule; c: Campaign };
@@ -94,6 +97,7 @@ export async function trackPlayers(playerIds: number[], times: Date[] = []) {
     }
     await syncNearAlerts(settings, players, promos, candidates, now);
     await syncRecalls(settings, part, now);
+    await trackBoxes(part);
   }
 }
 
@@ -115,7 +119,7 @@ export async function trackPromotion(promotionId: number) {
   const ids = [...new Set([...deposited, ...existing].map((r) => r.playerId))];
   // A rule that no longer applies: clear what it had raised.
   if (!rule || !rule.tiers.length || !promo.active) {
-    await prisma.alert.updateMany({ where: { promotionId, doneAt: null }, data: { doneAt: now, outcome: "auto" } });
+    await prisma.alert.updateMany({ where: { promotionId, doneAt: null, kind: { in: ["NEAR", "ELIGIBLE", "EXPIRING"] } }, data: { doneAt: now, outcome: "auto" } });
   }
   await trackPlayers(ids, []);
 }
@@ -377,11 +381,13 @@ export async function alertTick(force = false) {
 
     // Time is up: the period ended or the bonus expired.
     await prisma.alert.updateMany({ where: { doneAt: null, until: { lte: now } }, data: { doneAt: now, outcome: "auto" } });
-    // Promotions that were ended or no longer tracked.
-    const live = [...rules.keys()];
+    // Promotions that were ended or no longer tracked (Lucky Box promotions count as tracked).
+    const boxes = await boxPromos((await prisma.brand.findMany({ select: { id: true } })).map((b) => b.id));
+    const live = [...rules.keys(), ...boxes.map((b) => b.id)];
     await prisma.alert.updateMany({ where: { doneAt: null, promotionId: { not: null, ...(live.length ? { notIn: live } : {}) } }, data: { doneAt: now, outcome: "auto" } });
 
     if (s.refollowDays > 0) await refollow(s, now);
+    await expireBoxes(now);
   } catch (e) {
     console.error("alert tick failed", e);
   } finally {

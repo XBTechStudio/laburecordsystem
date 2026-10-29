@@ -4,7 +4,7 @@ import { tk, type T } from "@/lib/i18n";
 import { sym } from "@/lib/format";
 import { progressText, type PromoRule, type PromoTier } from "@/lib/promo-rule";
 
-export type AlertKindName = "NEAR" | "ELIGIBLE" | "EXPIRING" | "RECALLED" | "REFOLLOW";
+export type AlertKindName = "NEAR" | "ELIGIBLE" | "EXPIRING" | "RECALLED" | "REFOLLOW" | "BOX";
 
 export const KIND_LABEL: Record<AlertKindName, string> = {
   NEAR: tk("Close to a bonus"),
@@ -12,6 +12,7 @@ export const KIND_LABEL: Record<AlertKindName, string> = {
   EXPIRING: tk("Bonus expiring"),
   RECALLED: tk("Recalled"),
   REFOLLOW: tk("Follow up again"),
+  BOX: tk("Lucky Box ready"),
 };
 
 export const KIND_TONE: Record<AlertKindName, "brand" | "good" | "warning" | "critical" | "neutral"> = {
@@ -20,6 +21,7 @@ export const KIND_TONE: Record<AlertKindName, "brand" | "good" | "warning" | "cr
   EXPIRING: "warning",
   RECALLED: "good",
   REFOLLOW: "neutral",
+  BOX: "warning",
 };
 
 type Data = {
@@ -37,6 +39,8 @@ type Data = {
   depositAt?: string;
   contactAt?: string;
   channel?: string;
+  balance?: number;
+  netWin?: number;
 };
 
 const fmt = (v: number | undefined) => (Math.round((v ?? 0) * 100) / 100).toLocaleString("en");
@@ -75,6 +79,14 @@ export function alertText(kind: AlertKindName, raw: unknown, t: T, cur = ""): { 
       return {
         title: t("Deposited {amount}", { amount: c + fmt(d.deposit) }),
         detail: t("{when}, after the contact on {contact} ({channel})", { when: when(d.depositAt), contact: when(d.contactAt), channel: t(d.channel ?? "") }),
+      };
+    case "BOX":
+      return {
+        title: `${d.promo} · ${t("release {amount}", { amount: c + fmt(d.bonus) })}`,
+        detail:
+          (d.netWin != null ? t("Withdrawal on {when} with a net win of {amount}", { when: when(d.depositAt), amount: c + fmt(d.netWin) }) : t("Deposited {amount} since the box filled", { amount: c + fmt(d.deposit) })) +
+          " · " +
+          t("in the box: {amount}", { amount: c + fmt(d.balance) }),
       };
     case "REFOLLOW":
       return {

@@ -9,8 +9,10 @@ import { dateOnly } from "@/lib/dates";
 import { prisma } from "@/lib/db";
 import { safely, trackPromotion } from "@/lib/promo-engine";
 import { readRule } from "@/lib/promo-rule";
+import { readBox } from "@/lib/box-rule";
+import { trackBoxes } from "@/lib/lucky-box";
 
-const DAY = /^d{4}-d{2}-d{2}$/;
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 export async function savePromotion(_p: Result, fd: FormData) {
   return run(async () => {
@@ -89,5 +91,27 @@ export async function saveConditions(_p: Result, fd: FormData) {
     revalidatePath("/promotions", "layout");
     revalidatePath("/alerts");
     return rule ? "Conditions saved. Players' progress has been recounted." : "Tracking turned off for this promotion.";
+  });
+}
+
+/** Lucky Box release rules (or not a Lucky Box promotion any more). */
+export async function saveBoxRule(_p: Result, fd: FormData) {
+  return run(async () => {
+    const user = await guard("promotions", 3);
+    const p = await prisma.promotion.findUniqueOrThrow({ where: { id: int(fd, "id") } });
+    assertBrand(user, p.brandId);
+    const on = fd.get("enabled") === "on";
+    const rule = on
+      ? readBox({ minNetWin: str(fd, "minNetWin"), minDeposit: str(fd, "minDeposit"), releaseCap: str(fd, "releaseCap"), expiryDays: str(fd, "expiryDays"), notify: fd.get("notify") === "on" })
+      : null;
+    await prisma.promotion.update({ where: { id: p.id }, data: { box: rule ? (rule as unknown as Prisma.InputJsonValue) : Prisma.DbNull } });
+    await audit(user, "UPDATE", "Promotion", p.id, p.brandId, rule ? `Set Lucky Box rules for ${p.name}` : `Turned off Lucky Box for ${p.name}`, { before: p.box, after: rule });
+    const players = (await prisma.boxEntry.findMany({ where: { promotionId: p.id }, select: { playerId: true }, distinct: ["playerId"] })).map((x) => x.playerId);
+    if (!rule) await prisma.alert.updateMany({ where: { kind: "BOX", promotionId: p.id, doneAt: null }, data: { doneAt: new Date(), outcome: "auto" } });
+    else await safely("box rule", () => trackBoxes(players));
+    revalidatePath("/promotions");
+    revalidatePath("/lucky-box");
+    revalidatePath("/alerts");
+    return rule ? "Lucky Box rules saved. Boxes have been checked again." : "Lucky Box turned off for this promotion.";
   });
 }

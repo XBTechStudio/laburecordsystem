@@ -14,6 +14,7 @@ import { assignPlayer, deleteContact } from "../../cs/actions";
 import { updatePlayer } from "../actions";
 import { getT } from "@/lib/i18n-server";
 import { progressText, readRule, tierMet } from "@/lib/promo-rule";
+import { boxPromos, boxStates } from "@/lib/lucky-box";
 
 function daysAgo(days: number) {
   return Date.now() - days * 86400_000;
@@ -59,6 +60,8 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
       take: 20,
     }),
   ]);
+  const boxes = (await boxStates({ playerIds: [id], promos: await boxPromos([player.brandId], false) })).filter((b) => b.balance > 0.005 || b.stored > 0);
+  const boxName = new Map((await prisma.promotion.findMany({ where: { id: { in: boxes.map((b) => b.promotionId) } }, select: { id: true, name: true } })).map((p) => [p.id, p.name]));
   const tracking = progress.flatMap((p) => {
     const rule = readRule(p.promotion.rule);
     if (!rule || !p.promotion.active) return [];
@@ -402,6 +405,19 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
                     <Chip tone="warning">
                       {money(a.bonus, cur)} · {a.eligibleAt > new Date() ? t("From next period") : t("Not claimed yet")}
                     </Chip>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+          {boxes.length > 0 && (
+            <Card flush title={t("Lucky Box")} action={<Link className="link text-sm" href={`/lucky-box?q=${encodeURIComponent(player.username)}&status=all`}>{t("Open")}</Link>}>
+              <ul className="divide-y divide-[var(--line)] text-sm">
+                {boxes.map((b) => (
+                  <li key={b.promotionId} className="flex items-center gap-2 px-4 py-2.5">
+                    <span className="min-w-0 flex-1 truncate">{boxName.get(b.promotionId)}</span>
+                    <span className="font-medium">{money(b.balance, cur)}</span>
+                    {b.ready && <Chip tone="good">{t("Release {amount}", { amount: money(b.ready.amount, cur) })}</Chip>}
                   </li>
                 ))}
               </ul>

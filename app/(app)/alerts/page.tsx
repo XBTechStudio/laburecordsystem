@@ -7,18 +7,18 @@ import { alertText, KIND_LABEL, KIND_TONE, when, type AlertKindName } from "@/li
 import { alertScope, getsAlerts } from "@/lib/alerts";
 import { can, requirePage } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { count } from "@/lib/format";
+import { count, money } from "@/lib/format";
 import { tk } from "@/lib/i18n";
 import { getT } from "@/lib/i18n-server";
 import { alertTick } from "@/lib/promo-engine";
 import { getScope } from "@/lib/scope";
 import { getSettings } from "@/lib/settings";
-import { assignAlert, claimAlert, dismissAlert } from "./actions";
+import { assignAlert, claimAlert, dismissAlert, releaseAlert } from "./actions";
 
 const PER_PAGE = 50;
 const daysAgo = (d: number) => new Date(Date.now() - d * 86400_000);
 const KINDS = Object.keys(KIND_LABEL) as AlertKindName[];
-const OUTCOME: Record<string, string> = { contacted: tk("Contacted"), claimed: tk("Claimed"), dismissed: tk("Dismissed"), auto: tk("Closed by the system") };
+const OUTCOME: Record<string, string> = { contacted: tk("Contacted"), claimed: tk("Claimed"), released: tk("Released"), dismissed: tk("Dismissed"), auto: tk("Closed by the system") };
 
 export default async function AlertsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const user = await requirePage("alerts");
@@ -75,7 +75,7 @@ export default async function AlertsPage({ searchParams }: { searchParams: Promi
         <div className="mb-4 rounded-lg bg-surface-2 px-3 py-2 text-sm text-ink-2">{t("Your role doesn't receive alerts (Settings → Alerts).")}</div>
       )}
 
-      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-5">
+      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-6">
         {KINDS.map((k) => (
           <Link key={k} href={href({ kind: kind === k ? "" : k, tab: "open" })} className={`card p-3.5 hover:border-[var(--line-strong)] ${kind === k ? "ring-2 ring-brand" : ""}`}>
             <div className="text-xs text-ink-2">{t(KIND_LABEL[k])}</div>
@@ -185,6 +185,11 @@ export default async function AlertsPage({ searchParams }: { searchParams: Promi
                           {bonusAlert && (
                             <ActionButton action={claimAlert} fields={{ id: a.id }} question={t("Record that {name} received this bonus?", { name: a.player.username })}>
                               {t("Claimed")}
+                            </ActionButton>
+                          )}
+                          {k === "BOX" && (
+                            <ActionButton action={releaseAlert} fields={{ id: a.id }} question={t("Record that {name} got {amount} back from the Lucky Box? Add it on the platform first.", { name: a.player.username, amount: money(Number((a.data as { bonus?: number }).bonus ?? 0), scope.brandCurrency(a.brandId)) })}>
+                              {t("Released")}
                             </ActionButton>
                           )}
                           {!a.staffId && (

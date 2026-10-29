@@ -10,5 +10,6 @@ import seven from "./strings-7.json";
 import eight from "./strings-8.json";
 import nine from "./strings-9.json";
 import ten from "./strings-10.json";
+import eleven from "./strings-11.json";
 
-export const STRINGS = [...one, ...two, ...three, ...four, ...five, ...six, ...seven, ...eight, ...nine, ...ten] as [string, string, string][];
+export const STRINGS = [...one, ...two, ...three, ...four, ...five, ...six, ...seven, ...eight, ...nine, ...ten, ...eleven] as [string, string, string][];

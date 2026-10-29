@@ -10,6 +10,8 @@ import { dateOnlyStr } from "@/lib/dates";
 import { PERIODS, readRule, tierText } from "@/lib/promo-rule";
 import Link from "next/link";
 import { RuleEditor } from "./rule-editor";
+import { BoxRuleForm } from "./box-form";
+import { boxText, readBox } from "@/lib/box-rule";
 import { getScope } from "@/lib/scope";
 import { getSettings } from "@/lib/settings";
 import { saveConditions, savePromotion, togglePromotion } from "./actions";
@@ -225,6 +227,11 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
                             <Chip tone="brand">{t("Tracked")} · {t(PERIODS.find((x) => x.value === readRule(p.rule)!.period)!.label)}</Chip>
                           </Link>
                         )}
+                        {readBox(p.box) && (
+                          <Link href="/lucky-box" className="mt-0.5 ml-1 inline-block" title={boxText(readBox(p.box)!, t, cur)}>
+                            <Chip tone="warning">{t("Lucky Box")}</Chip>
+                          </Link>
+                        )}
                         {!p.active && <div className="text-xs text-muted">{t("Ended")}</div>}
                       </td>
                       {multi && <td className="text-ink-2">{scope.brandName(p.brandId)}</td>}
@@ -272,6 +279,9 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
                                 <Submit>{t("Save conditions")}</Submit>
                               </div>
                             </ActionForm>
+                          </Dialog>
+                          <Dialog label={t("Lucky Box")} title={t("Lucky Box: {name}", { name: p.name })}>
+                            <BoxRuleForm id={p.id} rule={readBox(p.box)} currency={cur} t={t} />
                           </Dialog>
                           <ActionButton action={togglePromotion} fields={{ id: p.id }}>
                             {p.active ? t("End") : t("Restart")}

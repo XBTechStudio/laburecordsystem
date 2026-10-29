@@ -53,6 +53,13 @@ const FIELDS: Record<ImportKind, FieldDef[]> = {
     { key: "amount", label: tk("Bonus amount"), required: true, parse: "amount" },
     { key: "time", label: tk("Date & time"), required: true, parse: "time" },
   ],
+  box: [
+    { key: "username", label: tk("Player username"), required: true, parse: "text" },
+    { key: "promo", label: tk("Promotion"), required: true, parse: "text" },
+    { key: "amount", label: tk("Points into the box"), required: true, parse: "amount" },
+    { key: "time", label: tk("Date & time"), required: true, parse: "time" },
+    { key: "note", label: tk("Note"), parse: "text" },
+  ],
 };
 
 // Header words we recognise, in English, Chinese and Malay/Indonesian.
@@ -392,6 +399,7 @@ export function ImportWizard({ brands, initialBrand }: { brands: { id: number; n
             <option value="txn">{t("Deposits / withdrawals")}</option>
             <option value="player">{t("Player list")}</option>
             <option value="claim">{t("Promotion claims")}</option>
+            <option value="box">{t("Lucky Box (points into boxes)")}</option>
           </select>
         </label>
         <label className="block">
@@ -502,7 +510,7 @@ export function ImportWizard({ brands, initialBrand }: { brands: { id: number; n
             <div className="mb-2 text-sm font-medium">4. {t("Match the columns")}</div>
             <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
               {fields.map((f) => {
-                const fixedOpts = f.key === "type" || (f.key === "promo" && kind === "claim") || (f.key === "channel" && kind === "txn");
+                const fixedOpts = f.key === "type" || (f.key === "promo" && (kind === "claim" || kind === "box")) || (f.key === "channel" && kind === "txn");
                 return (
                   <div key={f.key}>
                     <span className="label">

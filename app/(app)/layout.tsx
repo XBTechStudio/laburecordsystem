@@ -16,7 +16,7 @@ import { logout, setBrand } from "./shell-actions";
 const GROUPS: { group: string; modules: Module[] }[] = [
   { group: tk("Overview"), modules: ["dashboard"] },
   { group: tk("Data"), modules: ["entry", "import", "transactions"] },
-  { group: tk("Analysis"), modules: ["reports", "players", "alerts", "churn", "promotions", "cs"] },
+  { group: tk("Analysis"), modules: ["reports", "players", "alerts", "churn", "promotions", "luckybox", "cs"] },
   { group: tk("Finance"), modules: ["reconcile", "expenses", "dividends"] },
   { group: tk("Admin"), modules: ["brands", "users", "audit", "settings"] },
 ];

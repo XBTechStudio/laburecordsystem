@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import type { TxnType } from "@prisma/client";
+import { Prisma, type TxnType } from "@prisma/client";
 import { assertBrand, Denied, guard } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { amount, int, need, run, str, UserError, type Result } from "@/lib/action";
@@ -13,6 +13,8 @@ import { getT } from "@/lib/i18n-server";
 import { ensurePlayers, refreshPlayerStats } from "@/lib/players";
 import { linkClaims, safely, trackPlayers, unlinkClaims } from "@/lib/promo-engine";
 import { getSettings } from "@/lib/settings";
+import { DEFAULT_BOX } from "@/lib/box-rule";
+import { trackBoxes } from "@/lib/lucky-box";
 
 type Row = Record<string, string>;
 type Err = { i: number; msg: string };
@@ -59,13 +61,17 @@ async function brandOk(brandId: number, kind: string) {
 export async function loadLists(kind: string, brandId: number) {
   await brandOk(brandId, kind);
   const out: Record<string, string[]> = {};
-  if (kind === "txn" || kind === "claim") {
+  if (kind === "txn" || kind === "claim" || kind === "box") {
     const ps = await prisma.player.findMany({ where: { brandId }, select: { username: true }, orderBy: { lastDepositAt: "desc" }, take: 20000 });
     out.players = ps.map((p) => p.username);
   }
   if (kind === "claim") {
     const pr = await prisma.promotion.findMany({ where: { brandId, active: true }, select: { name: true }, orderBy: { name: "asc" } });
     out.promos = pr.map((p) => p.name);
+  }
+  if (kind === "box") {
+    const pr = await prisma.promotion.findMany({ where: { brandId, active: true, box: { not: Prisma.DbNull } }, select: { name: true }, orderBy: { name: "asc" } });
+    out.boxPromos = pr.map((p) => p.name);
   }
   return out;
 }
@@ -182,6 +188,55 @@ export async function saveBatch(kind: string, brandId: number, rows: Row[], defa
       );
     }
 
+    if (kind === "box") {
+      // Points into a player's Lucky Box. A promotion name not seen before becomes a Lucky Box promotion.
+      const promos = await prisma.promotion.findMany({ where: { brandId } });
+      const byName = new Map(promos.map((p) => [p.name.toLowerCase(), p]));
+      const parsed = rows.map((r, i) => {
+        const amt = pos(r.amount);
+        const at = when(r.time, defaultDate);
+        if (!r.player?.trim()) fail(i, "Player is missing");
+        else if (!r.promo?.trim()) fail(i, "Promotion is missing");
+        else if (!(amt > 0)) fail(i, "Amount must be more than 0");
+        else if (!at) fail(i, "Date/time isn't valid");
+        return { username: r.player?.trim() ?? "", promo: r.promo?.trim() ?? "", amount: amt, at: at!, note: r.note?.trim().slice(0, 250) || null };
+      });
+      if (errors.length) return { ok: false, message: NOTHING, errors };
+      const newNames: string[] = [];
+      for (const name of new Set(parsed.map((p) => p.promo))) {
+        const p = byName.get(name.toLowerCase());
+        if (!p) {
+          byName.set(name.toLowerCase(), await prisma.promotion.create({ data: { brandId, name, box: DEFAULT_BOX as unknown as Prisma.InputJsonValue } }));
+          newNames.push(name);
+        } else if (!p.box) byName.set(name.toLowerCase(), await prisma.promotion.update({ where: { id: p.id }, data: { box: DEFAULT_BOX as unknown as Prisma.InputJsonValue } }));
+      }
+      const { ids, created } = await ensurePlayers(brandId, parsed.map((p) => ({ username: p.username })));
+      await prisma.boxEntry.createMany({
+        data: parsed.map((p) => ({
+          brandId,
+          playerId: ids.get(p.username.toLowerCase())!,
+          promotionId: byName.get(p.promo.toLowerCase())!.id,
+          kind: "IN" as const,
+          amount: p.amount,
+          at: p.at,
+          note: p.note,
+          createdById: user.id,
+        })),
+      });
+      await safely("box", () => trackBoxes([...ids.values()]));
+      await audit(user, "CREATE", "BoxEntry", null, brandId, `Put ${parsed.length} amounts into Lucky Boxes for ${brand.name}`, {
+        total: parsed.reduce((a, p) => a + p.amount, 0),
+        newPromotions: newNames,
+        newPlayers: created,
+      });
+      revalidatePath("/lucky-box");
+      return done(
+        t("Saved {n} Lucky Box entries.", { n: parsed.length }) +
+          (newNames.length ? " " + t("New Lucky Box promotions: {names}. Set their release rules under Promotions → Lucky Box.", { names: newNames.join(", ") }) : "") +
+          (created ? " " + t("{n} new players added.", { n: created }) : ""),
+      );
+    }
+
     if (kind === "expense") {
       const cats = new Map((await prisma.expenseCategory.findMany({ where: { active: true } })).map((c) => [c.id, c]));
       const parsed = rows.map((r, i) => {
@@ -261,7 +316,17 @@ export async function deleteEntry(_p: Result, fd: FormData) {
       const user = await mayChange(c.createdById, c.createdAt, c.promotion.brandId);
       await safely("unlink", () => unlinkClaims({ id }));
       await prisma.promoClaim.delete({ where: { id } });
+      await safely("box", () => trackBoxes([c.playerId]));
       await audit(user, "DELETE", "PromoClaim", id, c.promotion.brandId, `Deleted claim of ${c.amount} (${c.promotion.name})`, c);
+    } else if (kind === "box") {
+      const b = await prisma.boxEntry.findUniqueOrThrow({ where: { id }, include: { promotion: true, player: true } });
+      const user = await mayChange(b.createdById, b.createdAt, b.brandId);
+      // A release is also a claim: removing the claim removes the release with it.
+      if (b.claimId) await prisma.promoClaim.delete({ where: { id: b.claimId } });
+      else await prisma.boxEntry.delete({ where: { id } });
+      await safely("box delete", () => trackBoxes([b.playerId]));
+      await audit(user, "DELETE", "BoxEntry", id, b.brandId, `Deleted Lucky Box ${b.kind.toLowerCase()} of ${b.amount} (${b.promotion.name}) for ${b.player.username}`, b);
+      revalidatePath("/lucky-box");
     } else if (kind === "expense") {
       const e = await prisma.expense.findUniqueOrThrow({ where: { id }, include: { category: true } });
       const user = await mayChange(e.createdById, e.createdAt, e.brandId, "expense");
@@ -313,6 +378,16 @@ export async function updateEntry(_p: Result, fd: FormData) {
       need(data.amount >= 0, "Amount isn't valid.");
       await prisma.promoClaim.update({ where: { id }, data });
       await audit(user, "UPDATE", "PromoClaim", id, c.promotion.brandId, `Edited claim #${id}`, { before: c, after: data });
+    } else if (kind === "box") {
+      const b = await prisma.boxEntry.findUniqueOrThrow({ where: { id } });
+      const user = await mayChange(b.createdById, b.createdAt, b.brandId);
+      const data = { amount: pos(str(fd, "amount")), at: TIME.test(time) ? fromLocalInput(time) : b.at, note: str(fd, "note").slice(0, 250) || null };
+      need(data.amount > 0, "Amount must be more than 0.");
+      await prisma.boxEntry.update({ where: { id }, data });
+      if (b.claimId) await prisma.promoClaim.update({ where: { id: b.claimId }, data: { amount: data.amount, claimedAt: data.at } });
+      await safely("box edit", () => trackBoxes([b.playerId]));
+      await audit(user, "UPDATE", "BoxEntry", id, b.brandId, `Edited Lucky Box entry #${id}`, { before: b, after: data });
+      revalidatePath("/lucky-box");
     } else if (kind === "expense") {
       const e = await prisma.expense.findUniqueOrThrow({ where: { id } });
       const user = await mayChange(e.createdById, e.createdAt, e.brandId, "expense");

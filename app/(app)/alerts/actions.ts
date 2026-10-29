@@ -5,6 +5,7 @@ import { assertBrand, can, Denied, guard } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { int, need, run, type Result } from "@/lib/action";
 import { prisma } from "@/lib/db";
+import { boxPromos, boxStates, releaseBox } from "@/lib/lucky-box";
 import { linkClaims, safely } from "@/lib/promo-engine";
 
 async function mine(id: number) {
@@ -60,5 +61,22 @@ export async function assignAlert(_p: Result, fd: FormData) {
     await prisma.alert.update({ where: { id: a.id }, data: { staffId: to } });
     revalidate();
     return to === user.id ? "Assigned to you." : "Assigned.";
+  });
+}
+
+/** The points were given back on the platform: record the release (and its claim) and close the alert. */
+export async function releaseAlert(_p: Result, fd: FormData) {
+  return run(async () => {
+    const { user, a } = await mine(int(fd, "id"));
+    need(a.kind === "BOX" && a.promotionId, "This alert isn't about a Lucky Box.");
+    const promos = await boxPromos([a.brandId], false);
+    const st = (await boxStates({ playerIds: [a.playerId], promos: promos.filter((p) => p.id === a.promotionId) }))[0];
+    need(st && st.balance > 0.005, "This Lucky Box is already empty.");
+    const amount = Math.min(Number((a.data as { bonus?: number }).bonus ?? st.balance) || st.balance, st.balance);
+    await releaseBox({ playerId: a.playerId, promotionId: a.promotionId, amount, userId: user.id, note: "alert" });
+    await audit(user, "CREATE", "BoxEntry", null, a.brandId, `Released ${amount} from the Lucky Box (${a.promotion?.name}) for ${a.player.username} from an alert`);
+    revalidate();
+    revalidatePath("/lucky-box");
+    return "Release recorded.";
   });
 }

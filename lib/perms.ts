@@ -22,6 +22,7 @@ export const MODULES = [
   { key: "alerts", href: "/alerts", label: tk("Follow-up alerts"), levels: [0, 1, 2, 3], hint: tk("Add = act on own alerts · Full = see and handle everyone's") },
   { key: "churn", href: "/churn", label: tk("Churn follow-up"), levels: [0, 1, 2, 3], hint: tk("Add = log contacts · Full = assign players to others") },
   { key: "promotions", href: "/promotions", label: tk("Promotions"), levels: [0, 1, 3], hint: tk("Full = create and edit promotions") },
+  { key: "luckybox", href: "/lucky-box", label: tk("Lucky Box"), levels: [0, 1, 2, 3], hint: tk("Add = record releases · Full = delete entries") },
   { key: "cs", href: "/cs", label: tk("CS recall tracking"), levels: [0, 1, 2, 3], hint: tk("Add = log own contacts · Full = edit/delete any log") },
   { key: "reconcile", href: "/reconcile", label: tk("PG / bank reconciliation"), levels: [0, 1, 2, 3], hint: tk("Add = enter real balances and transfers · Full = corrections, starting balances, deletions") },
   { key: "expenses", href: "/expenses", label: tk("Expenses & profit"), levels: [0, 1, 2, 3], hint: tk("Add = enter expenses · Full = edit/delete and manage categories") },
@@ -38,6 +39,8 @@ export type Perms = Partial<Record<Module, Level>>;
 export function levelOf(perms: Perms, m: Module): Level {
   // Roles saved before follow-up alerts existed get them at the level they have for following up players.
   if (m === "alerts" && perms.alerts === undefined) return Math.max(perms.churn ?? 0, perms.cs ?? 0) as Level;
+  // …and Lucky Box at the level they have for alerts (CS release the boxes they are told about).
+  if (m === "luckybox" && perms.luckybox === undefined) return levelOf(perms, "alerts");
   return (perms[m] ?? 0) as Level;
 }
 
@@ -58,6 +61,7 @@ export const DEFAULT_ROLES: { name: string; locked?: boolean; perms: Perms }[] =
       alerts: 1,
       churn: 2,
       promotions: 1,
+      luckybox: 1,
       cs: 2,
       reconcile: 2,
       expenses: 2,
@@ -70,8 +74,8 @@ export const DEFAULT_ROLES: { name: string; locked?: boolean; perms: Perms }[] =
   },
   {
     name: "Supervisor",
-    perms: { dashboard: 1, entry: 2, import: 2, transactions: 1, reports: 3, players: 1, alerts: 3, churn: 3, promotions: 1, cs: 2, reconcile: 2, expenses: 2, audit: 1 },
+    perms: { dashboard: 1, entry: 2, import: 2, transactions: 1, reports: 3, players: 1, alerts: 3, churn: 3, promotions: 1, luckybox: 3, cs: 2, reconcile: 2, expenses: 2, audit: 1 },
   },
   { name: "Data entry", perms: { entry: 2, import: 2, players: 1 } },
-  { name: "Customer service", perms: { players: 1, alerts: 2, churn: 2, cs: 2 } },
+  { name: "Customer service", perms: { players: 1, alerts: 2, churn: 2, luckybox: 2, cs: 2 } },
 ];

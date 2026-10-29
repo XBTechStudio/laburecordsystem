@@ -18,6 +18,7 @@ import { EditCell, payTo, TxnFields } from "./edit-cell";
 const KINDS = [
   { key: "txn", label: tk("Deposits & withdrawals") },
   { key: "claim", label: tk("Promotion claims") },
+  { key: "box", label: tk("Lucky Box") },
   { key: "player", label: tk("Players") },
 ] as const;
 type Kind = (typeof KINDS)[number]["key"];
@@ -75,6 +76,13 @@ export default async function EntryPage({ searchParams }: { searchParams: Promis
       { key: "amount", label: t("Bonus amount"), type: "amount", required: true, width: "7rem" },
       { key: "time", label: t("Date & time"), type: "datetime", width: "11rem" },
     ],
+    box: [
+      { key: "player", label: t("Player username"), type: "player", required: true, width: "11rem" },
+      { key: "promo", label: t("Promotion"), type: "combo", list: "boxPromos", required: true, width: "12rem", placeholder: t("e.g. Daily FREE") },
+      { key: "amount", label: t("Points into the box"), type: "amount", required: true, width: "8rem" },
+      { key: "time", label: t("Date & time"), type: "datetime", width: "11rem" },
+      { key: "note", label: t("Note"), type: "text", width: "12rem" },
+    ],
     player: [
       { key: "username", label: t("Username"), type: "text", required: true, width: "11rem" },
       { key: "phone", label: t("Phone"), type: "text", width: "9rem" },
@@ -86,6 +94,7 @@ export default async function EntryPage({ searchParams }: { searchParams: Promis
   const notes: Record<Kind, string> = {
     txn: t("New usernames are created as players automatically. Choose the PG / bank so its balance stays right."),
     claim: t("Type a promotion name that doesn't exist yet and it will be created."),
+    box: t("Winnings the player can't withdraw yet (e.g. Daily FREE). Take them off the player on the platform first. A new promotion name becomes a Lucky Box promotion."),
     player: t("Existing usernames are updated with the phone/name/note you enter."),
   };
 
@@ -106,6 +115,8 @@ export default async function EntryPage({ searchParams }: { searchParams: Promis
             ? [{ col: "amount", label: "", split: { by: "type", values: { DEPOSIT: t("Deposits"), WITHDRAW: t("Withdrawals") } } }]
             : kind === "claim"
               ? [{ col: "amount", label: t("Bonus") }]
+              : kind === "box"
+              ? [{ col: "amount", label: t("Lucky Box") }]
               : []
         }
       />
@@ -266,6 +277,63 @@ async function Recent({
                   </Field>
                 </div>,
                 t("claim"),
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  } else if (kind === "box") {
+    const rows = await prisma.boxEntry.findMany({
+      where: { brandId: { in: brandIds }, kind: "IN", createdAt: created, ...mine },
+      include: { player: true, promotion: true, createdBy: { select: { name: true } } },
+      orderBy: { id: "desc" },
+      take: 200,
+    });
+    total = rows.length;
+    table = (
+      <table className="tbl">
+        <thead>
+          <tr>
+            <th>{t("Player")}</th>
+            {multi && <th>{t("Brand")}</th>}
+            <th>{t("Promotion")}</th>
+            <th className="r">{t("Points into the box")}</th>
+            <th>{t("Time")}</th>
+            <th>{t("Note")}</th>
+            {everyone && <th>{t("Entered by")}</th>}
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((b) => (
+            <tr key={b.id}>
+              <td className="font-medium">
+                <Link className="hover:underline" href={`/players/${b.playerId}`}>
+                  {b.player.username}
+                </Link>
+              </td>
+              {multi && <td className="text-ink-2">{brandName(b.brandId)}</td>}
+              <td>{b.promotion.name}</td>
+              <td className="r">{money(b.amount, brandCurrency(b.brandId))}</td>
+              <td className="whitespace-nowrap text-ink-2">{dt(b.at)}</td>
+              <td className="max-w-48 truncate text-ink-2">{b.note ?? ""}</td>
+              {everyone && <td className="whitespace-nowrap text-ink-2">{b.createdBy?.name ?? "–"}</td>}
+              {actions(
+                b.id,
+                canChange(b.createdById, b.createdAt),
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label={t("Points into the box")}>
+                    <input name="amount" className="input" defaultValue={n(b.amount)} inputMode="decimal" />
+                  </Field>
+                  <Field label={t("Date & time")}>
+                    <input name="time" type="datetime-local" className="input" defaultValue={toLocalInput(b.at)} />
+                  </Field>
+                  <Field label={t("Note")} className="col-span-2">
+                    <input name="note" className="input" defaultValue={b.note ?? ""} />
+                  </Field>
+                </div>,
+                t("Lucky Box entry"),
               )}
             </tr>
           ))}

@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import type { TxnType } from "@prisma/client";
+import { Prisma, type TxnType } from "@prisma/client";
 import { assertBrand, Denied, guard } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { int, need, run, str, UserError, type Result } from "@/lib/action";
@@ -10,6 +10,8 @@ import { prisma } from "@/lib/db";
 import { getT } from "@/lib/i18n-server";
 import { ensurePlayers, refreshPlayerStats } from "@/lib/players";
 import { linkClaims, safely, trackPlayers, unlinkClaims } from "@/lib/promo-engine";
+import { DEFAULT_BOX } from "@/lib/box-rule";
+import { trackBoxes } from "@/lib/lucky-box";
 
 /** Rows arrive already normalised by the browser: times as "YYYY-MM-DDTHH:mm" (Malaysia), dates as "YYYY-MM-DD", amounts as numbers. */
 export type ImportRow = {
@@ -27,9 +29,9 @@ export type ImportRow = {
   promo?: string;
 };
 
-export type ImportKind = "txn" | "player" | "claim";
+export type ImportKind = "txn" | "player" | "claim" | "box";
 
-const KIND_LABEL: Record<ImportKind, string> = { txn: "transactions", player: "players", claim: "promotion claims" };
+const KIND_LABEL: Record<ImportKind, string> = { txn: "transactions", player: "players", claim: "promotion claims", box: "Lucky Box entries" };
 const TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
 
 async function access(brandId: number) {
@@ -189,6 +191,53 @@ export async function importChunk(batchId: number, rows: ImportRow[], offset: nu
       skipped = ok.length - inserted;
     }
 
+    if (kind === "box") {
+      const promos = await prisma.promotion.findMany({ where: { brandId } });
+      const byName = new Map(promos.map((p) => [p.name.toLowerCase(), p]));
+      const ok = rows
+        .map((r, i) => ({ r, i }))
+        .filter(({ r, i }) => {
+          if (!r.username?.trim()) return bad(i, "no username"), false;
+          if (!r.promo?.trim()) return bad(i, "no promotion"), false;
+          if (!(Number(r.amount) > 0)) return bad(i, "amount not valid"), false;
+          if (!r.time || !TIME.test(r.time)) return bad(i, "date/time not recognised"), false;
+          return true;
+        });
+      for (const name of new Set(ok.map(({ r }) => r.promo!.trim()))) {
+        const p = byName.get(name.toLowerCase());
+        const box = DEFAULT_BOX as unknown as Prisma.InputJsonValue;
+        if (!p) byName.set(name.toLowerCase(), await prisma.promotion.create({ data: { brandId, name, box } }));
+        else if (!p.box) byName.set(name.toLowerCase(), await prisma.promotion.update({ where: { id: p.id }, data: { box } }));
+      }
+      const res = await ensurePlayers(brandId, ok.map(({ r }) => ({ username: r.username! })), batchId);
+      created = res.created;
+      const data = ok.map(({ r }) => ({
+        brandId,
+        promotionId: byName.get(r.promo!.trim().toLowerCase())!.id,
+        playerId: res.ids.get(r.username!.trim().toLowerCase())!,
+        kind: "IN" as const,
+        amount: Math.round(Number(r.amount) * 100) / 100,
+        at: fromLocalInput(r.time!),
+        note: r.note?.trim()?.slice(0, 250) || null,
+        createdById: user.id,
+        importId: batchId,
+      }));
+      // Re-importing the same file: same player, promotion, amount and time is skipped.
+      const times = data.map((d) => d.at.getTime());
+      const existing = data.length
+        ? await prisma.boxEntry.findMany({
+            where: { kind: "IN", playerId: { in: [...new Set(data.map((d) => d.playerId))] }, at: { gte: new Date(Math.min(...times)), lte: new Date(Math.max(...times)) } },
+            select: { playerId: true, promotionId: true, amount: true, at: true },
+          })
+        : [];
+      const key = (d: { playerId: number; promotionId: number; amount: unknown; at: Date }) => `${d.playerId}|${d.promotionId}|${Number(d.amount).toFixed(2)}|${d.at.getTime()}`;
+      const have = new Set(existing.map(key));
+      const fresh = data.filter((d) => !have.has(key(d)));
+      inserted = (await prisma.boxEntry.createMany({ data: fresh })).count;
+      await safely("import box", () => trackBoxes([...new Set(fresh.map((d) => d.playerId))]));
+      skipped = ok.length - inserted;
+    }
+
     await prisma.importBatch.update({ where: { id: batchId }, data: { inserted: { increment: inserted }, skipped: { increment: skipped + problems.length } } });
     return { inserted, skipped, created, problems, newChannels };
   } catch (e) {
@@ -226,9 +275,13 @@ export async function undoImport(_p: Result, fd: FormData) {
     } else if (b.kind === "claim") {
       await safely("undo claims", () => unlinkClaims({ importId: id }));
       removed = (await prisma.promoClaim.deleteMany({ where: { importId: id } })).count;
+    } else if (b.kind === "box") {
+      const pids = [...new Set((await prisma.boxEntry.findMany({ where: { importId: id }, select: { playerId: true } })).map((x) => x.playerId))];
+      removed = (await prisma.boxEntry.deleteMany({ where: { importId: id } })).count;
+      await safely("undo box", () => trackBoxes(pids));
     }
     // Players created by this import go too, unless something else now refers to them.
-    const players = await prisma.player.deleteMany({ where: { importId: id, txns: { none: {} }, claims: { none: {} }, contacts: { none: {} } } });
+    const players = await prisma.player.deleteMany({ where: { importId: id, txns: { none: {} }, claims: { none: {} }, contacts: { none: {} }, boxes: { none: {} } } });
     if (b.kind === "player") removed = players.count;
     await prisma.importBatch.update({ where: { id }, data: { undoneAt: new Date() } });
     await audit(user, "UNDO", "ImportBatch", id, b.brandId, `Undid import of ${b.filename} (${removed} rows removed)`);
