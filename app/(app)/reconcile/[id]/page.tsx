@@ -109,7 +109,7 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
                   </select>
                 </Field>
                 <Field label={t("Currency")}>
-                  <input name="currency" className="input uppercase" defaultValue={acc.currency} maxLength={3} />
+                  <input name="currency" className="input uppercase" defaultValue={acc.currency} maxLength={5} />
                 </Field>
                 <Field label={t("Fee %")} hint={t("Of each deposit")}>
                   <input name="feePercent" className="input" inputMode="decimal" defaultValue={n(acc.feePercent)} />

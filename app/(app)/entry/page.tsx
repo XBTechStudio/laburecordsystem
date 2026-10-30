@@ -47,6 +47,7 @@ export default async function EntryPage({ searchParams }: { searchParams: Promis
   const [scope, t, settings] = await Promise.all([getScope(user), getT(), getSettings()]);
   const channels = await prisma.payChannel.findMany({ where: { active: true }, orderBy: [{ type: "asc" }, { name: "asc" }] });
   const chOpts = channels.map((c) => ({ value: String(c.id), label: c.name }));
+  const chPick = channels.map((c) => ({ value: String(c.id), label: c.name, code: c.code }));
 
   const cols: Record<Kind, Col[]> = {
     txn: [
@@ -65,7 +66,7 @@ export default async function EntryPage({ searchParams }: { searchParams: Promis
       },
       { key: "amount", label: t("Amount"), type: "amount", required: true, width: "7rem" },
       { key: "time", label: t("Date & time"), type: "datetime", width: "11rem" },
-      { key: "channel", label: t("PG / bank"), type: "select", options: chOpts, width: "9rem" },
+      { key: "channel", label: t("PG / bank"), type: "pick", options: chPick, width: "10rem", placeholder: t("code or name") },
       { key: "payBank", label: t("Withdrawal bank"), type: "text", width: "9rem", placeholder: t("optional") },
       { key: "payAccount", label: t("Account no."), type: "text", width: "9rem", placeholder: t("optional") },
       { key: "note", label: t("Note"), type: "text", width: "9rem" },
@@ -149,7 +150,7 @@ export default async function EntryPage({ searchParams }: { searchParams: Promis
           totals={kind === "claim" ? [{ col: "amount", label: t("Bonus") }] : kind === "box" ? [{ col: "amount", label: t("Lucky Box") }] : []}
         />
       )}
-      <Recent user={user} kind={kind} sp={sp} brandIds={scope.brandIds} channels={chOpts} brandCurrency={scope.brandCurrency} brandName={scope.brandName} multi={!scope.current} />
+      <Recent user={user} kind={kind} sp={sp} brandIds={scope.brandIds} channels={chOpts} brandCurrency={scope.brandCurrency} brandName={scope.brandName} />
     </Shell>
   );
 }
@@ -182,7 +183,6 @@ async function Recent({
   channels,
   brandCurrency,
   brandName,
-  multi,
 }: {
   user: CurrentUser;
   kind: Kind;
@@ -191,7 +191,6 @@ async function Recent({
   channels: { value: string; label: string }[];
   brandCurrency: (id: number) => string;
   brandName: (id: number) => string;
-  multi: boolean;
 }) {
   const [t, rights] = await Promise.all([getT(), editRights(user, "entry")]);
   const full = rights.full;
@@ -223,8 +222,8 @@ async function Recent({
       <table className="tbl">
         <thead>
           <tr>
+            <th>{t("Brand")}</th>
             <th>{t("Player")}</th>
-            {multi && <th>{t("Brand")}</th>}
             <th>{t("Type")}</th>
             <th className="r">{t("Amount")}</th>
             <th>{t("Time")}</th>
@@ -239,12 +238,12 @@ async function Recent({
         <tbody>
           {rows.map((tx) => (
             <tr key={tx.id}>
+              <td className="whitespace-nowrap text-ink-2">{brandName(tx.brandId)}</td>
               <td className="font-medium">
                 <Link className="hover:underline" href={`/players/${tx.playerId}`}>
                   {tx.player.username}
                 </Link>
               </td>
-              {multi && <td className="text-ink-2">{brandName(tx.brandId)}</td>}
               <td>{tx.type === "DEPOSIT" ? <Chip tone="good">{t("Deposit")}</Chip> : <Chip tone="warning">{t("Withdrawal")}</Chip>}</td>
               <td className="r">{money(tx.amount, brandCurrency(tx.brandId))}</td>
               <td className="whitespace-nowrap text-ink-2">{dt(tx.txnAt)}</td>
@@ -276,8 +275,8 @@ async function Recent({
       <table className="tbl">
         <thead>
           <tr>
+            <th>{t("Brand")}</th>
             <th>{t("Player")}</th>
-            {multi && <th>{t("Brand")}</th>}
             <th>{t("Promotion")}</th>
             <th className="r">{t("Bonus")}</th>
             <th>{t("Time")}</th>
@@ -288,8 +287,8 @@ async function Recent({
         <tbody>
           {rows.map((c) => (
             <tr key={c.id}>
+              <td className="whitespace-nowrap text-ink-2">{brandName(c.promotion.brandId)}</td>
               <td className="font-medium">{c.player.username}</td>
-              {multi && <td className="text-ink-2">{brandName(c.promotion.brandId)}</td>}
               <td>{c.promotion.name}</td>
               <td className="r">{money(c.amount, brandCurrency(c.promotion.brandId))}</td>
               <td className="whitespace-nowrap text-ink-2">{dt(c.claimedAt)}</td>
@@ -324,8 +323,8 @@ async function Recent({
       <table className="tbl">
         <thead>
           <tr>
+            <th>{t("Brand")}</th>
             <th>{t("Player")}</th>
-            {multi && <th>{t("Brand")}</th>}
             <th>{t("Promotion")}</th>
             <th className="r">{t("Points into the box")}</th>
             <th>{t("Time")}</th>
@@ -337,12 +336,12 @@ async function Recent({
         <tbody>
           {rows.map((b) => (
             <tr key={b.id}>
+              <td className="whitespace-nowrap text-ink-2">{brandName(b.brandId)}</td>
               <td className="font-medium">
                 <Link className="hover:underline" href={`/players/${b.playerId}`}>
                   {b.player.username}
                 </Link>
               </td>
-              {multi && <td className="text-ink-2">{brandName(b.brandId)}</td>}
               <td>{b.promotion.name}</td>
               <td className="r">{money(b.amount, brandCurrency(b.brandId))}</td>
               <td className="whitespace-nowrap text-ink-2">{dt(b.at)}</td>
@@ -380,8 +379,8 @@ async function Recent({
       <table className="tbl">
         <thead>
           <tr>
+            <th>{t("Brand")}</th>
             <th>{t("Username")}</th>
-            {multi && <th>{t("Brand")}</th>}
             <th>{t("Phone")}</th>
             <th>{t("Name")}</th>
             <th>{t("Note")}</th>
@@ -391,12 +390,12 @@ async function Recent({
         <tbody>
           {rows.map((p) => (
             <tr key={p.id}>
+              <td className="whitespace-nowrap text-ink-2">{brandName(p.brandId)}</td>
               <td className="font-medium">
                 <Link className="hover:underline" href={`/players/${p.id}`}>
                   {p.username}
                 </Link>
               </td>
-              {multi && <td className="text-ink-2">{brandName(p.brandId)}</td>}
               <td>{p.phone ?? "–"}</td>
               <td>{p.name ?? "–"}</td>
               <td className="max-w-56 truncate text-ink-2">{p.note ?? ""}</td>

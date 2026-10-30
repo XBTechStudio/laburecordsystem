@@ -99,7 +99,8 @@ export async function importChunk(batchId: number, rows: ImportRow[], offset: nu
     if (kind === "txn") {
       // PG/bank names not seen before become new accounts, so every transaction counts towards a balance.
       const channels = await prisma.payChannel.findMany();
-      const chByName = new Map(channels.map((c) => [c.name.toLowerCase(), c.id]));
+      // A PG/bank can be named in the file by its name or its short code.
+      const chByName = new Map([...channels.flatMap((c) => (c.code ? [[c.code.toLowerCase(), c.id] as const] : [])), ...channels.map((c) => [c.name.toLowerCase(), c.id] as const)]);
       const brand = await prisma.brand.findUniqueOrThrow({ where: { id: brandId } });
       for (const name of new Set(rows.map((r) => r.channel?.trim()).filter((x): x is string => !!x))) {
         if (chByName.has(name.toLowerCase())) continue;

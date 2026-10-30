@@ -56,7 +56,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 <input name="systemName" className="input" defaultValue={s.systemName} disabled={ro} />
               </Field>
               <Field label={t("Base currency")} hint={t("Totals across brands are shown in this currency.")}>
-                <input name="baseCurrency" className="input uppercase" defaultValue={s.baseCurrency} maxLength={3} disabled={ro} />
+                <input name="baseCurrency" className="input uppercase" defaultValue={s.baseCurrency} maxLength={5} disabled={ro} />
               </Field>
             </div>
             <Field
@@ -238,6 +238,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <table className="tbl">
               <thead>
                 <tr>
+                  <th>{t("Short code")}</th>
                   <th>{t("Name")}</th>
                   <th>{t("Type")}</th>
                   <th>{t("Currency")}</th>
@@ -250,6 +251,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               <tbody>
                 {channels.map((c) => (
                   <tr key={c.id} className={c.active ? "" : "opacity-60"}>
+                    <td className="text-ink-2">{c.code ?? "–"}</td>
                     <td className="font-medium">{c.name}</td>
                     <td>{c.type === "PG" ? t("Payment gateway") : t("Bank")}</td>
                     <td>{c.currency}</td>
@@ -259,7 +261,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                     {!ro && (
                       <td className="r space-x-1">
                         <Dialog label={t("Edit")} title={t("Edit {name}", { name: c.name })}>
-                          <ChannelForm t={t} base={s.baseCurrency} c={{ id: c.id, name: c.name, type: c.type, currency: c.currency, feePercent: n(c.feePercent), feeFixed: n(c.feeFixed) }} />
+                          <ChannelForm t={t} base={s.baseCurrency} c={{ id: c.id, name: c.name, code: c.code, type: c.type, currency: c.currency, feePercent: n(c.feePercent), feeFixed: n(c.feeFixed) }} />
                         </Dialog>
                         <ActionButton action={toggleChannel} fields={{ id: c.id }}>
                           {c.active ? t("Deactivate") : t("Reactivate")}
@@ -270,7 +272,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 ))}
                 {channels.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-ink-2">
+                    <td colSpan={8} className="py-8 text-center text-ink-2">
                       {t("No channels yet. Add each payment gateway and bank account you use.")}
                     </td>
                   </tr>
@@ -295,7 +297,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   );
 }
 
-function ChannelForm({ c, t, base }: { c?: { id: number; name: string; type: string; currency: string; feePercent: number; feeFixed: number }; t: T; base: string }) {
+function ChannelForm({ c, t, base }: { c?: { id: number; name: string; code: string | null; type: string; currency: string; feePercent: number; feeFixed: number }; t: T; base: string }) {
   return (
     <ActionForm action={saveChannel} close className="space-y-3">
       {c && <input type="hidden" name="id" value={c.id} />}
@@ -316,7 +318,10 @@ function ChannelForm({ c, t, base }: { c?: { id: number; name: string; type: str
           <input name="feeFixed" className="input" inputMode="decimal" defaultValue={c?.feeFixed ?? 0} />
         </Field>
         <Field label={t("Currency")}>
-          <input name="currency" className="input uppercase" defaultValue={c?.currency ?? base} maxLength={3} />
+          <input name="currency" className="input uppercase" defaultValue={c?.currency ?? base} maxLength={5} />
+        </Field>
+        <Field label={t("Short code")} hint={t("Type this on the entry form instead of the name, e.g. 01.")}>
+          <input name="code" className="input" defaultValue={c?.code ?? ""} maxLength={20} placeholder={t("optional")} />
         </Field>
       </div>
       <div className="flex justify-end">

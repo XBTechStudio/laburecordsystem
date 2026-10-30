@@ -122,7 +122,7 @@ export async function setOpening(_p: Result, fd: FormData) {
     const feeFixed = amount(str(fd, "feeFixed") || "0");
     const currency = (str(fd, "currency") || "MYR").toUpperCase();
     need(feePercent >= 0 && feeFixed >= 0, "Fees can't be negative.");
-    need(/^[A-Z]{3}$/.test(currency), "Currency should be a 3-letter code like MYR or THB.");
+    need(/^[A-Z]{3,5}$/.test(currency), "Currency should be a code like MYR, AUD or USDT.");
     const statementUrl = str(fd, "statementUrl") ? checkStatementUrl(str(fd, "statementUrl")) : null;
     const before = await prisma.payChannel.findUniqueOrThrow({ where: { id } });
     const newLink = statementUrl !== before.statementUrl;

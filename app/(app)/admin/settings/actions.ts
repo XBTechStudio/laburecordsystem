@@ -22,7 +22,7 @@ export async function saveGeneral(_p: Result, fd: FormData) {
     const name = str(fd, "systemName");
     const cur = str(fd, "baseCurrency").toUpperCase();
     need(name, "Please enter a system name.");
-    need(/^[A-Z]{3}$/.test(cur), "Base currency should be a 3-letter code like MYR.");
+    need(/^[A-Z]{3,5}$/.test(cur), "Base currency should be a code like MYR, SGD or USDT.");
     await save("systemName", name, "system name");
     await save("baseCurrency", cur, "base currency");
     const fix = Math.round(num(fd, "selfFixMinutes") || 0);
@@ -118,8 +118,13 @@ export async function saveChannel(_p: Result, fd: FormData) {
       feePercent: num(fd, "feePercent") || 0,
       feeFixed: num(fd, "feeFixed") || 0,
       currency: (str(fd, "currency") || "MYR").toUpperCase(),
+      code: str(fd, "code").slice(0, 20) || null,
     };
-    need(/^[A-Z]{3}$/.test(data.currency), "Currency should be a 3-letter code like MYR or THB.");
+    if (data.code) {
+      const taken = await prisma.payChannel.findFirst({ where: { code: data.code, ...(id ? { id: { not: id } } : {}) } });
+      need(!taken, "Another PG / bank already uses this code.");
+    }
+    need(/^[A-Z]{3,5}$/.test(data.currency), "Currency should be a code like MYR, AUD or USDT.");
     need(data.name, "Please enter the channel name.");
     need(data.feePercent >= 0 && data.feeFixed >= 0, "Fees can't be negative.");
     if (id) {

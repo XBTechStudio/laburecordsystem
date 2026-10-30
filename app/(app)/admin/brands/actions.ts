@@ -11,7 +11,7 @@ function read(fd: FormData) {
   const currency = (str(fd, "currency") || "MYR").toUpperCase();
   const fxRate = amount(str(fd, "fxRate") || "1");
   need(name, "Please give the brand a name.");
-  need(/^[A-Z]{3}$/.test(currency), "Currency should be a 3-letter code like MYR or THB.");
+  need(/^[A-Z]{3,5}$/.test(currency), "Currency should be a code like MYR, AUD or USDT.");
   need(fxRate > 0, "The exchange rate must be more than 0.");
   return { name, currency, fxRate };
 }

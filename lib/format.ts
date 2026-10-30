@@ -12,7 +12,7 @@ export function n(v: Num): number {
   return Number.isFinite(x) ? x : 0;
 }
 
-const SYMBOL: Record<string, string> = { MYR: "RM", SGD: "S$", USD: "US$", THB: "฿", IDR: "Rp", PHP: "₱", VND: "₫", CNY: "¥" };
+const SYMBOL: Record<string, string> = { MYR: "RM", SGD: "S$", USD: "US$", THB: "฿", IDR: "Rp", PHP: "₱", VND: "₫", CNY: "¥", AUD: "A$", USDT: "USDT" };
 export const sym = (cur = "MYR") => SYMBOL[cur] ?? cur;
 
 export const money = (v: Num, cur?: string) => `${sym(cur)} ${two.format(n(v))}`;

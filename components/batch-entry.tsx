@@ -7,9 +7,10 @@ import { useT } from "@/components/i18n";
 export type Col = {
   key: string;
   label: string;
-  type: "text" | "amount" | "int" | "select" | "datetime" | "date" | "player" | "combo";
+  /** pick = type a short code or the start of a name, e.g. "01" → the PG / bank with code 01. */
+  type: "text" | "amount" | "int" | "select" | "datetime" | "date" | "player" | "combo" | "pick";
   required?: boolean;
-  options?: { value: string; label: string }[];
+  options?: { value: string; label: string; code?: string | null }[];
   /** Pasted/typed words that mean an option value, e.g. { d: "DEPOSIT", 充值: "DEPOSIT" }. */
   aliases?: Record<string, string>;
   placeholder?: string;
@@ -24,6 +25,17 @@ export type BatchResult = { ok: boolean; message: string; errors?: { i: number; 
 const blank = (cols: Col[]): Row => Object.fromEntries(cols.map((c) => [c.key, c.type === "select" && c.required ? (c.options?.[0]?.value ?? "") : ""]));
 const isEmpty = (r: Row, cols: Col[]) => cols.every((c) => !r[c.key] || (c.type === "select" && c.required));
 const num = (v: string) => Number(v.replace(/[^\d.-]/g, ""));
+
+/** The option a typed text means: its code, its full name, or the only name that starts with it. */
+function resolvePick(c: Col, text: string) {
+  const v = text.trim().toLowerCase();
+  if (!v) return null;
+  const opts = c.options ?? [];
+  const hit = opts.find((o) => o.code?.toLowerCase() === v) ?? opts.find((o) => o.label.toLowerCase() === v);
+  if (hit) return hit;
+  const starts = opts.filter((o) => o.label.toLowerCase().startsWith(v));
+  return starts.length === 1 ? starts[0] : null;
+}
 
 function pad2(x: number) {
   return String(x).padStart(2, "0");
@@ -101,6 +113,7 @@ export function BatchEntry({
     if (!v) return c.required && c.type !== "datetime" && c.type !== "date" ? t("Required") : null;
     if ((c.type === "amount" || c.type === "int") && !(num(v) >= 0)) return t("Not a number");
     if (c.type === "select" && !c.options?.some((o) => o.value === v)) return t("Pick from the list");
+    if (c.type === "pick" && !resolvePick(c, v)) return t("No PG / bank with this code or name");
     return null;
   };
   const filled = rows.map((r, i) => ({ r, i })).filter(({ r }) => !isEmpty(r, cols));
@@ -121,6 +134,7 @@ export function BatchEntry({
       const alias = Object.entries(c.aliases ?? {}).find(([k]) => k.toLowerCase() === lower);
       return alias ? alias[1] : v;
     }
+    if (c.type === "pick") return resolvePick(c, v)?.label ?? v;
     if (c.type === "amount") return v.replace(/[^\d.,-]/g, "").replace(/,/g, "");
     if (c.type === "datetime") {
       const m = v.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[ T](\d{1,2}):(\d{2}))?/) ?? v.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})(?:[ T](\d{1,2}):(\d{2}))?/);
@@ -172,6 +186,12 @@ export function BatchEntry({
     }
   };
 
+  // A pick column sends the option's value, not the text shown.
+  const pickValue = (key: string, v: string) => {
+    const c = allCols.find((x) => x.key === key);
+    return c?.type === "pick" ? (resolvePick(c, v)?.value ?? "") : v;
+  };
+
   const submit = () => {
     if (!filled.length) return setResult({ ok: false, message: t("Nothing to save yet — fill in at least one row.") });
     if (filled.some(({ r }) => !rowBrand(r))) return setResult({ ok: false, message: t("Choose which brand these entries are for.") });
@@ -183,7 +203,7 @@ export function BatchEntry({
       const saved = new Set<number>();
       const messages: string[] = [];
       for (const [b, part] of groups) {
-        const res = await save(kind, b, part.map(({ r }) => ({ ...Object.fromEntries(Object.entries(r).filter(([k]) => k !== "brand")), ...fixed })), defaultDate);
+        const res = await save(kind, b, part.map(({ r }) => ({ ...Object.fromEntries(Object.entries(r).filter(([k]) => k !== "brand").map(([k, v]) => [k, pickValue(k, v)])), ...fixed })), defaultDate);
         if (!res.ok) {
           setRows((rs) => keep(rs, saved));
           // Map errors back from "position within this brand's rows" to grid row index (after the saved rows are gone).
@@ -288,7 +308,7 @@ export function BatchEntry({
                         </select>
                       );
                     } else {
-                      const listId = c.type === "player" ? `dl-players-${rb}` : c.type === "combo" ? `dl-${c.list}-${rb}` : undefined;
+                      const listId = c.type === "player" ? `dl-players-${rb}` : c.type === "combo" ? `dl-${c.list}-${rb}` : c.type === "pick" ? `dl-pick-${c.key}` : undefined;
                       input = (
                         <input
                           {...common}
@@ -298,6 +318,7 @@ export function BatchEntry({
                           list={listId}
                           placeholder={c.placeholder}
                           onChange={(e) => setCell(i, c.key, e.target.value)}
+                          onBlur={c.type === "pick" ? (e) => setCell(i, c.key, normalise(c, e.target.value)) : undefined}
                         />
                       );
                     }
@@ -332,6 +353,17 @@ export function BatchEntry({
         </table>
       </div>
 
+      {cols
+        .filter((c) => c.type === "pick")
+        .map((c) => (
+          <datalist key={c.key} id={`dl-pick-${c.key}`}>
+            {c.options?.map((o) => (
+              <option key={o.value} value={o.label}>
+                {o.code ?? ""}
+              </option>
+            ))}
+          </datalist>
+        ))}
       {usedBrands.map((b) => (
         <div key={b} hidden>
           <datalist id={`dl-players-${b}`}>

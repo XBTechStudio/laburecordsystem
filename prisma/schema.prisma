@@ -130,7 +130,7 @@ model Session {
 model Brand {
   id        Int      @id @default(autoincrement())
   name      String   @unique @db.VarChar(80)
-  currency  String   @default("MYR") @db.VarChar(3)
+  currency  String   @default("MYR") @db.VarChar(5)
   /// 1 unit of this brand's currency = fxRate units of the base currency.
   fxRate    Decimal  @default(1) @db.Decimal(14, 6)
   active    Boolean  @default(true)
@@ -220,7 +220,9 @@ model PayChannel {
   id              Int         @id @default(autoincrement())
   name            String      @unique @db.VarChar(80)
   type            ChannelType
-  currency        String      @default("MYR") @db.VarChar(3)
+  currency        String      @default("MYR") @db.VarChar(5)
+  /// Short code staff can type instead of the name on the entry form, e.g. "01".
+  code            String?     @unique @db.VarChar(20)
   /// Fee charged on money coming in, % of amount plus a fixed amount per deposit.
   feePercent      Decimal     @default(0) @db.Decimal(6, 3)
   feeFixed        Decimal     @default(0) @db.Decimal(10, 2)

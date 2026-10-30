@@ -8,7 +8,7 @@ import { getT } from "@/lib/i18n-server";
 import { getSettings } from "@/lib/settings";
 import { createBrand, toggleBrand, updateBrand } from "./actions";
 
-const CURRENCIES = ["MYR", "SGD", "THB", "IDR", "PHP", "VND", "USD", "CNY"];
+const CURRENCIES = ["SGD", "MYR", "AUD", "USDT", "USD", "THB", "IDR", "PHP", "VND", "CNY"];
 
 function BrandFields({ b, base, t }: { b?: { id: number; name: string; currency: string; fxRate: { toString(): string } }; base: string; t: T }) {
   return (
@@ -19,7 +19,7 @@ function BrandFields({ b, base, t }: { b?: { id: number; name: string; currency:
       </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label={t("Currency")} hint={t("What this brand's amounts are entered in.")}>
-          <input name="currency" className="input uppercase" list="currencies" defaultValue={b?.currency ?? base} maxLength={3} required />
+          <input name="currency" className="input uppercase" list="currencies" defaultValue={b?.currency ?? base} maxLength={5} required />
         </Field>
         <Field label={t("Rate to {base}", { base })} hint={t("1 unit of this currency = ? {base}. Used when brands are combined.", { base })}>
           <input name="fxRate" className="input" inputMode="decimal" defaultValue={b ? n(b.fxRate) : 1} required />

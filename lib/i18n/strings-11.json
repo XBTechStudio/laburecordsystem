@@ -84,5 +84,12 @@
 ["Your role may not enter deposits","你的角色不能录入充值","Peran Anda tidak boleh menginput deposit"],
 ["Your role may not enter withdrawals","你的角色不能录入提款","Peran Anda tidak boleh menginput penarikan"],
 ["your role may not enter deposits","你的角色不能录入充值","peran Anda tidak boleh menginput deposit"],
-["your role may not enter withdrawals","你的角色不能录入提款","peran Anda tidak boleh menginput penarikan"]
+["your role may not enter withdrawals","你的角色不能录入提款","peran Anda tidak boleh menginput penarikan"],
+["Another PG / bank already uses this code.","这个代号已经被别的 PG / 银行用了。","Kode ini sudah dipakai PG / bank lain."],
+["Base currency should be a code like MYR, SGD or USDT.","基础货币要填代码，例如 MYR、SGD 或 USDT。","Mata uang dasar harus berupa kode seperti MYR, SGD atau USDT."],
+["code or name","代号或名称","kode atau nama"],
+["Currency should be a code like MYR, AUD or USDT.","货币要填代码，例如 MYR、AUD 或 USDT。","Mata uang harus berupa kode seperti MYR, AUD atau USDT."],
+["No PG / bank with this code or name","没有这个代号或名称的 PG / 银行","Tidak ada PG / bank dengan kode atau nama ini"],
+["Short code","代号","Kode singkat"],
+["Type this on the entry form instead of the name, e.g. 01.","录入时打这个代号就会自动选上，例如 01。","Ketik kode ini di form input sebagai ganti nama, mis. 01."]
 ]
