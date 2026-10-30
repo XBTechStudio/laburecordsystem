@@ -11,13 +11,14 @@ import { createUser, deleteRole, resetPassword, saveRole, updateUser } from "./a
 
 function BrandAccess({ brands, all, picked, t }: { brands: Brand[]; all: boolean; picked: number[]; t: T }) {
   return (
-    <fieldset>
+    <fieldset className="group">
       <legend className="label">{t("Brand access")}</legend>
       <label className="mb-2 flex items-center gap-2 text-sm">
         <input type="checkbox" name="allBrands" defaultChecked={all} className="h-4 w-4 accent-[var(--brand)]" />
         {t("All brands, including ones added later")}
       </label>
-      <div className="grid grid-cols-2 gap-1.5 rounded-lg border border-line p-2.5 sm:grid-cols-3">
+      {/* Greyed out while "All brands" is ticked: the ticks below don't count then. */}
+      <div className="grid grid-cols-2 gap-1.5 rounded-lg border border-line p-2.5 group-has-[[name=allBrands]:checked]:pointer-events-none group-has-[[name=allBrands]:checked]:opacity-40 sm:grid-cols-3">
         {brands.map((b) => (
           <label key={b.id} className="flex items-center gap-2 text-sm">
             <input type="checkbox" name="brandIds" value={b.id} defaultChecked={picked.includes(b.id)} className="h-4 w-4 accent-[var(--brand)]" />
@@ -43,16 +44,28 @@ function RoleSelect({ roles, value, t }: { roles: Role[]; value?: number; t: T }
   );
 }
 
+/** Same column widths for the pinned heading table and the module table, so they line up. */
+const RoleCols = () => (
+  <colgroup>
+    <col />
+    {LEVELS.map((l) => (
+      <col key={l.value} className="w-[15%]" />
+    ))}
+  </colgroup>
+);
+
 function RoleEditor({ role, t }: { role?: Role; t: T }) {
   const perms = (role?.perms ?? {}) as Perms;
   return (
     <ActionForm action={saveRole} close>
       {role && <input type="hidden" name="id" value={role.id} />}
-      <Field label={t("Role name")}>
-        <input name="name" className="input" defaultValue={role?.name} required placeholder={t("e.g. Finance")} />
-      </Field>
-      <div className="mt-4 overflow-x-auto">
-        <table className="tbl">
+      {/* The name and the level headings stay at the top while the module list scrolls under them. */}
+      <div className="sticky -top-5 z-10 -mx-5 -mt-5 border-b border-line bg-surface px-5 pt-5">
+        <Field label={t("Role name")}>
+          <input name="name" className="input" defaultValue={role?.name} required placeholder={t("e.g. Finance")} />
+        </Field>
+        <table className="tbl mt-4 table-fixed">
+          <RoleCols />
           <thead>
             <tr>
               <th>{t("Module")}</th>
@@ -63,6 +76,11 @@ function RoleEditor({ role, t }: { role?: Role; t: T }) {
               ))}
             </tr>
           </thead>
+        </table>
+      </div>
+      <div>
+        <table className="tbl table-fixed">
+          <RoleCols />
           <tbody>
             {MODULES.map((m) => (
               <tr key={m.key}>
