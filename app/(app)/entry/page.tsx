@@ -128,6 +128,7 @@ export default async function EntryPage({ searchParams }: { searchParams: Promis
             fixed={{ type }}
             cols={txnCols(type)}
             carryBrand={settings.entry.carryBrand}
+            enterSaves={settings.entry.enterSaves}
             brands={brands}
             brandId={brandId}
             save={saveBatch}
@@ -142,6 +143,7 @@ export default async function EntryPage({ searchParams }: { searchParams: Promis
           kind={kind}
           cols={shown(cols[kind])}
           carryBrand={settings.entry.carryBrand}
+            enterSaves={settings.entry.enterSaves}
           brands={brands}
           brandId={brandId}
           save={saveBatch}

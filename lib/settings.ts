@@ -61,8 +61,8 @@ export type Settings = {
   selfFixMinutes: number;
   /** A statement line and a recorded transaction with the same amount count as the same when this close in time. */
   statementMinutes: number;
-  /** Data entry form. pickTime off = deposits, withdrawals and claims always get the time they are saved. carryBrand = a brand picked on a row fills the empty rows below. */
-  entry: { pickTime: boolean; carryBrand: boolean };
+  /** Data entry form. pickTime off = deposits, withdrawals and claims always get the time they are saved. carryBrand = a brand picked on a row fills the empty rows below. enterSaves = Enter saves the form (off = Enter goes to the next row). */
+  entry: { pickTime: boolean; carryBrand: boolean; enterSaves: boolean };
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -94,7 +94,7 @@ export const DEFAULT_SETTINGS: Settings = {
   reconTolerance: 1,
   selfFixMinutes: 0,
   statementMinutes: 30,
-  entry: { pickTime: false, carryBrand: false },
+  entry: { pickTime: false, carryBrand: false, enterSaves: true },
 };
 
 export const getSettings = cache(async (): Promise<Settings> => {

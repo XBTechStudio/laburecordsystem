@@ -91,5 +91,8 @@
 ["Currency should be a code like MYR, AUD or USDT.","货币要填代码，例如 MYR、AUD 或 USDT。","Mata uang harus berupa kode seperti MYR, AUD atau USDT."],
 ["No PG / bank with this code or name","没有这个代号或名称的 PG / 银行","Tidak ada PG / bank dengan kode atau nama ini"],
 ["Short code","代号","Kode singkat"],
-["Type this on the entry form instead of the name, e.g. 01.","录入时打这个代号就会自动选上，例如 01。","Ketik kode ini di form input sebagai ganti nama, mis. 01."]
+["Type this on the entry form instead of the name, e.g. 01.","录入时打这个代号就会自动选上，例如 01。","Ketik kode ini di form input sebagai ganti nama, mis. 01."],
+["Pressing Enter saves the form","按 Enter 直接保存","Tekan Enter langsung menyimpan"],
+["Off = Enter goes to the next row and staff press Save at the end.","不勾 = 按 Enter 跳到下一行，最后再点保存。","Mati = Enter pindah ke baris berikutnya, lalu tekan Simpan di akhir."],
+["Press Enter to save.","按 Enter 直接保存。","Tekan Enter untuk menyimpan."]
 ]

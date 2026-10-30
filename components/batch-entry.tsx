@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useT } from "@/components/i18n";
 
@@ -57,6 +57,7 @@ export function BatchEntry({
   carryBrand = false,
   title,
   fixed,
+  enterSaves = false,
 }: {
   kind: string;
   cols: Col[];
@@ -73,6 +74,8 @@ export function BatchEntry({
   title?: string;
   /** Values sent with every row, e.g. { type: "DEPOSIT" } for a deposits-only form. */
   fixed?: Row;
+  /** Enter saves the form instead of moving to the next row. */
+  enterSaves?: boolean;
 }) {
   const router = useRouter();
   const t = useT();
@@ -181,6 +184,12 @@ export function BatchEntry({
   const onKey = (i: number, ci: number) => (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       e.preventDefault();
+      if (enterSaves) {
+        // Leave the cell first so a typed PG / bank code becomes its name, then save.
+        (e.target as HTMLElement).blur();
+        setTimeout(() => submitRef.current(), 50);
+        return;
+      }
       if (i === rows.length - 1) setRows((rs) => [...rs, fresh(lastBrand(rs))]);
       setTimeout(() => focusCell(i + 1, ci));
     }
@@ -192,6 +201,7 @@ export function BatchEntry({
     return c?.type === "pick" ? (resolvePick(c, v)?.value ?? "") : v;
   };
 
+  const submitRef = useRef(() => {});
   const submit = () => {
     if (!filled.length) return setResult({ ok: false, message: t("Nothing to save yet — fill in at least one row.") });
     if (filled.some(({ r }) => !rowBrand(r))) return setResult({ ok: false, message: t("Choose which brand these entries are for.") });
@@ -232,6 +242,10 @@ export function BatchEntry({
     const b = lastBrand(rs);
     return [...left, ...Array.from({ length: Math.max(6 - left.length, 1) }, () => fresh(b))];
   };
+  // Enter saves through this, so it always runs with the latest rows.
+  useLayoutEffect(() => {
+    submitRef.current = submit;
+  });
 
   const sums = (totals ?? []).flatMap((t) => {
     if (!t.split) return [{ label: t.label, v: filled.reduce((a, { r }) => a + (num(r[t.col] ?? "") || 0), 0), n: filled.length }];
@@ -255,7 +269,7 @@ export function BatchEntry({
           </label>
         )}
         <p className="min-w-60 flex-1 text-xs text-ink-2">
-          {note ?? t("Type or paste rows straight from Excel.")} {t("Press Enter to go to the next row.")}
+          {note ?? t("Type or paste rows straight from Excel.")} {enterSaves ? t("Press Enter to save.") : t("Press Enter to go to the next row.")}
           {hasTime && " " + t("Rows without a time: today = the time you save, another date = 12:00.")} {t("Empty rows are ignored.")}
         </p>
       </div>

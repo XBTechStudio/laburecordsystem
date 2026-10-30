@@ -33,7 +33,7 @@ export async function saveGeneral(_p: Result, fd: FormData) {
       { fees: fd.get("fees") === "on", promos: fd.get("promos") === "on", expenses: fd.get("expenses") === "on", income: fd.get("income") === "on" },
       "net profit formula",
     );
-    await save("entry", { pickTime: fd.get("pickTime") === "on", carryBrand: fd.get("carryBrand") === "on" }, "data entry form");
+    await save("entry", { pickTime: fd.get("pickTime") === "on", carryBrand: fd.get("carryBrand") === "on", enterSaves: fd.get("enterSaves") === "on" }, "data entry form");
   });
 }
 

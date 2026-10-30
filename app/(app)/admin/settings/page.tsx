@@ -69,6 +69,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               <legend className="label">{t("Data entry")}</legend>
               <Check name="pickTime" label={t("Staff may enter the date & time of deposits, withdrawals and claims")} hint={t("Off = every row gets the time it is saved.")} on={s.entry.pickTime} disabled={ro} />
               <Check name="carryBrand" label={t("A brand picked on a row fills the empty rows below")} hint={t("Off = every row starts empty and staff pick its brand.")} on={s.entry.carryBrand} disabled={ro} />
+              <Check name="enterSaves" label={t("Pressing Enter saves the form")} hint={t("Off = Enter goes to the next row and staff press Save at the end.")} on={s.entry.enterSaves} disabled={ro} />
             </fieldset>
             <fieldset className="space-y-2.5">
               <legend className="label">{t("Net profit = Win/Loss …")}</legend>
