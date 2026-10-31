@@ -95,7 +95,8 @@ function permsFrom(fd: FormData): Perms {
   const perms: Perms = {};
   for (const m of MODULES) {
     const v = Number(fd.get(`perm_${m.key}`) ?? 0) as Level;
-    if ((m.levels as readonly number[]).includes(v) && v > 0) perms[m.key] = v;
+    // "No access" is saved too: a module missing from a role falls back to an older default (e.g. withdrawals follow Data entry).
+    perms[m.key] = (m.levels as readonly number[]).includes(v) ? v : 0;
   }
   return perms;
 }
@@ -107,7 +108,7 @@ export async function saveRole(_p: Result, fd: FormData) {
     const name = str(fd, "name");
     need(name, "Please give the role a name.");
     const perms = permsFrom(fd);
-    need(Object.keys(perms).length, "Give this role access to at least one module.");
+    need(Object.values(perms).some((v) => v > 0), "Give this role access to at least one module.");
     if (id) {
       const r = await prisma.role.findUniqueOrThrow({ where: { id } });
       need(!r.locked, "The Administrator role always has full access and can't be changed.");
