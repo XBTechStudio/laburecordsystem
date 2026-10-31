@@ -7,20 +7,13 @@ import { dayStart, todayStr } from "@/lib/dates";
 import { prisma } from "@/lib/db";
 import { ago, dt, money, n } from "@/lib/format";
 import { tk } from "@/lib/i18n";
+import { MOVE_LABEL, moveDetail } from "@/lib/move-kinds";
 import { getT } from "@/lib/i18n-server";
 import { getSettings } from "@/lib/settings";
 import { deleteCheck, deleteMove } from "./actions";
 import { BalanceForm, MoveForm, ResolveForm, TransferForm } from "./forms";
+import { ExchangeForm } from "./exchange-form";
 import { ReconcileTabs } from "./parts";
-
-const MOVE_LABEL: Record<string, string> = {
-  TRANSFER_IN: tk("Transfer in"),
-  TRANSFER_OUT: tk("Transfer out"),
-  TOPUP: tk("Money put in"),
-  CASHOUT: tk("Money taken out"),
-  FEE: tk("Bank / PG charge"),
-  ADJUST: tk("Correction"),
-};
 
 function hoursAgo(h: number) {
   return new Date(Date.now() - h * 3600_000);
@@ -44,6 +37,7 @@ export default async function ReconcilePage() {
     prisma.balanceCheck.findMany({ orderBy: { at: "desc" }, take: 30, include: { channel: true } }),
     prisma.channelMove.findMany({ orderBy: { at: "desc" }, take: 30, include: { channel: true } }),
   ]);
+  const changers = (await prisma.channelMove.findMany({ where: { kind: { in: ["EXCHANGE_OUT", "EXCHANGE_IN"] }, party: { not: null } }, distinct: ["party"], select: { party: true } })).map((m) => m.party!);
   const last = new Map(lastChecks.map((c) => [c.channelId, c]));
   const todayOf = (id: number, type: string) => today.find((x) => x.channelId === id && x.type === type);
   const stale = hoursAgo(24);
@@ -81,6 +75,9 @@ export default async function ReconcilePage() {
               <>
                 <Dialog label={"+ " + t("Transfer between accounts")} title={t("Transfer between accounts")}>
                   <TransferForm accounts={accs} t={t} />
+                </Dialog>
+                <Dialog label={"+ " + t("Money changer")} title={t("Sell to or buy from a money changer")}>
+                  <ExchangeForm accounts={accs} parties={changers} />
                 </Dialog>
                 <Dialog label={"+ " + t("Other movement")} title={t("Money in or out of an account")}>
                   <MoveForm accounts={accs} t={t} allowAdjust={full} />
@@ -277,7 +274,7 @@ export default async function ReconcilePage() {
                           <td className="font-medium">{m.channel.name}</td>
                           <td>
                             {t(MOVE_LABEL[m.kind] ?? m.kind)}
-                            {m.note && <div className="max-w-56 truncate text-xs text-muted">{m.note}</div>}
+                            {(m.note || m.party) && <div className="max-w-72 truncate text-xs text-muted">{moveDetail(m, m.channel.currency, t)}</div>}
                           </td>
                           <td className={`r font-medium ${n(m.amount) < 0 ? "text-critical-ink" : "text-good-ink"}`}>
                             {n(m.amount) > 0 ? "+" : ""}

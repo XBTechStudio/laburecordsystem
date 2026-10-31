@@ -7,5 +7,5 @@
 ["In: {amount} ({n} orders)", "入款：{amount}（{n} 笔）", "Masuk: {amount} ({n} order)"],
 ["Out: {amount} ({n} orders)", "出款：{amount}（{n} 笔）", "Keluar: {amount} ({n} order)"],
 ["Recorded in the system today", "系统今天记录到的", "Tercatat di sistem hari ini"],
-["Tick this if the PG balance goes up by the full deposit. Record the fee in “Transfer fee” when you record the settlement.", "如果 PG 余额是按入款全额增加的，就勾选这个。记录结算时，把手续费填在“转账手续费”里。", "Centang ini jika saldo PG bertambah sebesar deposit penuh. Catat biayanya di “Biaya transfer” saat mencatat settlement."]
+["Tick this if the PG balance goes up by the full deposit. Record the fee in “Transfer / settlement fee” when you record the settlement.", "如果 PG 余额是按入款全额增加的，就勾选这个。记录结算时，把手续费填在“转账 / 结算手续费”里。", "Centang ini jika saldo PG bertambah sebesar deposit penuh. Catat biayanya di “Biaya transfer” saat mencatat settlement."]
 ]

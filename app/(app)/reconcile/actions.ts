@@ -12,6 +12,7 @@ import { prisma } from "@/lib/db";
 import { money, n } from "@/lib/format";
 import { getT } from "@/lib/i18n-server";
 import { getSettings } from "@/lib/settings";
+import { LOAN_KINDS, LOAN_SIGN, type LoanKind } from "@/lib/move-kinds";
 import { checkStatementUrl, syncStatements } from "@/lib/statements";
 
 const TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
@@ -19,6 +20,7 @@ const when = (fd: FormData) => (TIME.test(str(fd, "time")) ? fromLocalInput(str(
 
 function refresh(channelId?: number) {
   revalidatePath("/reconcile");
+  revalidatePath("/reconcile/loans");
   if (channelId) revalidatePath(`/reconcile/${channelId}`);
   revalidatePath("/");
 }
@@ -61,8 +63,10 @@ export async function recordTransfer(_p: Result, fd: FormData) {
     const [a, b] = await Promise.all([prisma.payChannel.findUniqueOrThrow({ where: { id: from } }), prisma.payChannel.findUniqueOrThrow({ where: { id: to } })]);
     await prisma.channelMove.createMany({
       data: [
-        { channelId: from, kind: "TRANSFER_OUT", amount: -(amt + fee), at, transferRef: ref, note, userName: user.name },
+        { channelId: from, kind: "TRANSFER_OUT", amount: -amt, at, transferRef: ref, note, userName: user.name },
         { channelId: to, kind: "TRANSFER_IN", amount: amt, at, transferRef: ref, note, userName: user.name },
+        // The fee is its own line, so settlement fees can be added up per account.
+        ...(fee > 0 ? [{ channelId: from, kind: (a.type === "PG" ? "SETTLE_FEE" : "FEE") as MoveKind, amount: -fee, at, transferRef: ref, note, userName: user.name }] : []),
       ],
     });
     await audit(user, "CREATE", "ChannelMove", ref, null, `Transfer ${amt} from ${a.name} to ${b.name}${fee ? ` (fee ${fee})` : ""}`);
@@ -71,7 +75,7 @@ export async function recordTransfer(_p: Result, fd: FormData) {
   });
 }
 
-const SIGN: Record<string, 1 | -1> = { TOPUP: 1, CASHOUT: -1, FEE: -1 };
+const SIGN: Record<string, 1 | -1> = { TOPUP: 1, CASHOUT: -1, FEE: -1, SETTLE_FEE: -1 };
 
 export async function recordMove(_p: Result, fd: FormData) {
   return run(async () => {
@@ -79,7 +83,7 @@ export async function recordMove(_p: Result, fd: FormData) {
     const user = await guard("reconcile", kind === "ADJUST" ? 3 : 2);
     const channelId = int(fd, "channelId");
     const amt = amount(str(fd, "amount"));
-    need(["TOPUP", "CASHOUT", "FEE", "ADJUST"].includes(kind), "Choose what kind of movement this is.");
+    need(["TOPUP", "CASHOUT", "FEE", "SETTLE_FEE", "ADJUST"].includes(kind), "Choose what kind of movement this is.");
     need(Number.isFinite(amt) && amt !== 0, "Enter an amount.");
     if (kind !== "ADJUST") need(amt > 0, "Amount must be more than 0.");
     const c = await prisma.payChannel.findUniqueOrThrow({ where: { id: channelId } });
@@ -87,6 +91,83 @@ export async function recordMove(_p: Result, fd: FormData) {
     await prisma.channelMove.create({ data: { channelId, kind, amount: value, at: when(fd), note: str(fd, "note") || null, userName: user.name } });
     await audit(user, "CREATE", "ChannelMove", channelId, null, `${kind} ${value} on ${c.name}`);
     refresh(channelId);
+    return "Saved.";
+  });
+}
+
+const r2 = (v: number) => Math.round(v * 100) / 100;
+
+/**
+ * Money sold to or bought from a money changer (钱庄). The rate is the price of 1 unit of the other currency in this
+ * account's currency, so the other side gets amount ÷ rate. If the other currency lands in (or comes from) one of our
+ * own accounts, that account gets the matching line too.
+ */
+export async function recordExchange(_p: Result, fd: FormData) {
+  return run(async () => {
+    const user = await guard("reconcile", 2);
+    const channelId = int(fd, "channelId");
+    const out = str(fd, "dir") !== "IN";
+    const party = str(fd, "party").slice(0, 80);
+    const amt = amount(str(fd, "amount"));
+    const rate = amount(str(fd, "rate"));
+    const otherId = Number(str(fd, "otherId")) || null;
+    need(party, "Enter the money changer's name.");
+    need(amt > 0, "Amount must be more than 0.");
+    need(rate > 0, "Enter the exchange rate.");
+    need(otherId !== channelId, "Choose two different accounts.");
+    const [c, other] = await Promise.all([prisma.payChannel.findUniqueOrThrow({ where: { id: channelId } }), otherId ? prisma.payChannel.findUniqueOrThrow({ where: { id: otherId } }) : null]);
+    const otherCurrency = (other?.currency ?? str(fd, "otherCurrency")).toUpperCase().slice(0, 10);
+    need(/^[A-Z0-9]{2,10}$/.test(otherCurrency), "Enter the other currency, e.g. USDT.");
+    const otherAmount = r2(amt / rate);
+    const at = when(fd);
+    const note = str(fd, "note") || null;
+    const ref = other ? randomBytes(8).toString("hex") : null;
+    await prisma.channelMove.createMany({
+      data: [
+        { channelId, kind: out ? "EXCHANGE_OUT" : "EXCHANGE_IN", amount: out ? -amt : amt, at, party, rate, otherAmount, otherCurrency, transferRef: ref, note, userName: user.name },
+        ...(other
+          ? [
+              {
+                channelId: other.id,
+                kind: (out ? "EXCHANGE_IN" : "EXCHANGE_OUT") as MoveKind,
+                amount: out ? otherAmount : -otherAmount,
+                at,
+                party,
+                rate: Math.round((otherAmount / amt) * 1e6) / 1e6,
+                otherAmount: amt,
+                otherCurrency: c.currency,
+                transferRef: ref,
+                note,
+                userName: user.name,
+              },
+            ]
+          : []),
+      ],
+    });
+    await audit(user, "CREATE", "ChannelMove", channelId, null, `${out ? "Sold" : "Bought"} ${amt} ${c.currency} ${out ? "to" : "from"} ${party} at ${rate} (${otherAmount} ${otherCurrency})`);
+    refresh(channelId);
+    if (other) revalidatePath(`/reconcile/${other.id}`);
+    const t = await getT();
+    return t("Saved: {amount} {cur} at {rate}.", { amount: otherAmount.toFixed(2), cur: otherCurrency, rate });
+  });
+}
+
+/** Lending between operators (同行互借). Lending and paying back move money out; borrowing and being paid back move it in. */
+export async function recordLoan(_p: Result, fd: FormData) {
+  return run(async () => {
+    const user = await guard("reconcile", 2);
+    const kind = str(fd, "kind") as LoanKind;
+    const channelId = int(fd, "channelId");
+    const party = str(fd, "party").slice(0, 80);
+    const amt = amount(str(fd, "amount"));
+    need(LOAN_KINDS.includes(kind), "Choose what kind of movement this is.");
+    need(party, "Enter the other operator's name.");
+    need(amt > 0, "Amount must be more than 0.");
+    const c = await prisma.payChannel.findUniqueOrThrow({ where: { id: channelId } });
+    await prisma.channelMove.create({ data: { channelId, kind, amount: amt * LOAN_SIGN[kind], at: when(fd), party, note: str(fd, "note") || null, userName: user.name } });
+    await audit(user, "CREATE", "ChannelMove", channelId, null, `${kind} ${amt} ${c.currency} with ${party} on ${c.name}`);
+    refresh(channelId);
+    revalidatePath("/reconcile/loans");
     return "Saved.";
   });
 }

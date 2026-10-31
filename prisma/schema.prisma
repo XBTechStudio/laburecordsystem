@@ -25,6 +25,16 @@ enum MoveKind {
   CASHOUT
   FEE
   ADJUST
+  /// Fee a PG keeps when it pays out (settles) to a bank.
+  SETTLE_FEE
+  /// Sold to / bought from a money changer (钱庄); rate and the other currency's amount are kept.
+  EXCHANGE_OUT
+  EXCHANGE_IN
+  /// Lending between operators (同行互借): we lend and get it back, or we borrow and pay it back.
+  LEND_OUT
+  LEND_BACK
+  BORROW_IN
+  BORROW_BACK
 }
 
 enum CategoryKind {
@@ -269,16 +279,22 @@ model StatementDay {
 /// Money moved in or out of an account outside player transactions: transfers between accounts,
 /// capital top-ups, cash-outs, bank charges and corrections. Positive adds to the balance.
 model ChannelMove {
-  id          Int      @id @default(autoincrement())
-  channelId   Int
-  kind        MoveKind
-  amount      Decimal  @db.Decimal(14, 2)
-  at          DateTime
+  id            Int      @id @default(autoincrement())
+  channelId     Int
+  kind          MoveKind
+  amount        Decimal  @db.Decimal(14, 2)
+  at            DateTime
   /// Links the two halves of a transfer.
-  transferRef String?  @db.VarChar(40)
-  note        String?  @db.VarChar(255)
-  userName    String?  @db.VarChar(80)
-  createdAt   DateTime @default(now())
+  transferRef   String?  @db.VarChar(40)
+  /// Money changer or other operator for exchanges and loans.
+  party         String?  @db.VarChar(80)
+  /// Exchanges: price of 1 unit of the other currency in this account's currency, and the other side's amount.
+  rate          Decimal? @db.Decimal(18, 6)
+  otherAmount   Decimal? @db.Decimal(16, 2)
+  otherCurrency String?  @db.VarChar(10)
+  note          String?  @db.VarChar(255)
+  userName      String?  @db.VarChar(80)
+  createdAt     DateTime @default(now())
 
   channel PayChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
 

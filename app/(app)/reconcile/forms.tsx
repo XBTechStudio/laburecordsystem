@@ -2,7 +2,7 @@ import { ActionForm, Submit } from "@/components/client";
 import { Field } from "@/components/ui";
 import { money } from "@/lib/format";
 import type { T } from "@/lib/i18n";
-import { recordBalance, recordMove, recordTransfer, resolveCheck } from "./actions";
+import { recordBalance, recordLoan, recordMove, recordTransfer, resolveCheck } from "./actions";
 
 type Acc = { id: number; name: string; currency: string };
 
@@ -61,7 +61,7 @@ export function TransferForm({ accounts, t }: { accounts: Acc[]; t: T }) {
         <Field label={t("Amount")}>
           <input name="amount" className="input" inputMode="decimal" required />
         </Field>
-        <Field label={t("Transfer fee")} hint={t("Taken from the sending account")}>
+        <Field label={t("Transfer / settlement fee")} hint={t("Taken from the sending account; from a PG it is booked as a settlement fee")}>
           <input name="fee" className="input" inputMode="decimal" placeholder="0" />
         </Field>
         <Field label={t("When")} hint={t("Leave empty for now")}>
@@ -96,6 +96,7 @@ export function MoveForm({ accounts, t, allowAdjust, channelId }: { accounts: Ac
             <option value="TOPUP">{t("Money put in (top-up, capital)")}</option>
             <option value="CASHOUT">{t("Money taken out (cash-out, owner)")}</option>
             <option value="FEE">{t("Bank / PG charge")}</option>
+            <option value="SETTLE_FEE">{t("Settlement fee")}</option>
             {allowAdjust && <option value="ADJUST">{t("Correction (+ or −)")}</option>}
           </select>
         </Field>
@@ -109,6 +110,53 @@ export function MoveForm({ accounts, t, allowAdjust, channelId }: { accounts: Ac
       <Field label={t("Note")}>
         <input name="note" className="input" />
       </Field>
+      <div className="flex justify-end">
+        <Submit>{t("Save")}</Submit>
+      </div>
+    </ActionForm>
+  );
+}
+
+/** Lending between operators (同行互借), one line per loan or repayment. */
+export function LoanForm({ accounts, t, parties, party, kind }: { accounts: Acc[]; t: T; parties: string[]; party?: string; kind?: string }) {
+  return (
+    <ActionForm action={recordLoan} close className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <Field label={t("Operator")}>
+          <input name="party" className="input" list="dl-operators" defaultValue={party} required placeholder={t("e.g. Brand X boss")} />
+          <datalist id="dl-operators">
+            {parties.map((p) => (
+              <option key={p} value={p} />
+            ))}
+          </datalist>
+        </Field>
+        <Field label={t("What happened")}>
+          <select name="kind" className="input" defaultValue={kind ?? "LEND_OUT"} required>
+            <option value="LEND_OUT">{t("We lent to them (money goes out)")}</option>
+            <option value="LEND_BACK">{t("They paid us back (money comes in)")}</option>
+            <option value="BORROW_IN">{t("We borrowed from them (money comes in)")}</option>
+            <option value="BORROW_BACK">{t("We paid them back (money goes out)")}</option>
+          </select>
+        </Field>
+        <Field label={t("Account")} hint={t("Where the money went out or came in")}>
+          <select name="channelId" className="input" required>
+            {accounts.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name} ({a.currency})
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={t("Amount")}>
+          <input name="amount" className="input" inputMode="decimal" required />
+        </Field>
+        <Field label={t("When")} hint={t("Leave empty for now")}>
+          <input name="time" type="datetime-local" className="input" />
+        </Field>
+        <Field label={t("Note")}>
+          <input name="note" className="input" />
+        </Field>
+      </div>
       <div className="flex justify-end">
         <Submit>{t("Save")}</Submit>
       </div>

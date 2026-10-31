@@ -5,12 +5,13 @@ import { dt } from "@/lib/format";
 import { tk, type T } from "@/lib/i18n";
 import type { AccountDay } from "@/lib/statements";
 
-export function ReconcileTabs({ active, t }: { active: "balances" | "statements"; t: T }) {
+export function ReconcileTabs({ active, t }: { active: "balances" | "statements" | "loans"; t: T }) {
   return (
     <Tabs
       items={[
         { href: "/reconcile", label: t("Balances"), active: active === "balances" },
         { href: "/reconcile/statements", label: t("Statement match"), active: active === "statements" },
+        { href: "/reconcile/loans", label: t("Operator loans"), active: active === "loans" },
       ]}
     />
   );

@@ -5,12 +5,14 @@ import { RangeBar } from "@/components/range";
 import { Card, Field, Info, TableWrap } from "@/components/ui";
 import { can, requirePage } from "@/lib/auth";
 import { expectedBalances, ledger } from "@/lib/balances";
-import { parseRange, todayStr, toLocalInput } from "@/lib/dates";
+import { addDays, dayStart, parseRange, todayStr, toLocalInput } from "@/lib/dates";
 import { prisma } from "@/lib/db";
 import { count, dt, money, n } from "@/lib/format";
 import { getT } from "@/lib/i18n-server";
 import { getSettings } from "@/lib/settings";
 import { setOpening } from "../actions";
+import { MOVE_LABEL, moveDetail } from "@/lib/move-kinds";
+import { ExchangeForm } from "../exchange-form";
 import { BalanceForm, MoveForm } from "../forms";
 
 export default async function AccountPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | undefined>> }) {
@@ -31,6 +33,10 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
     prisma.channelMove.findMany({ where: { channelId: id }, orderBy: { at: "desc" }, take: 20 }),
     prisma.payChannel.findMany({ where: { active: true }, orderBy: { name: "asc" }, select: { id: true, name: true, currency: true } }),
   ]);
+  const [settleFees, changers] = await Promise.all([
+    prisma.channelMove.aggregate({ where: { channelId: id, kind: "SETTLE_FEE", at: { gte: dayStart(range.from), lt: dayStart(addDays(range.to, 1)) } }, _sum: { amount: true }, _count: true }),
+    prisma.channelMove.findMany({ where: { kind: { in: ["EXCHANGE_OUT", "EXCHANGE_IN"] }, party: { not: null } }, distinct: ["party"], select: { party: true } }),
+  ]);
   const checkByDay = new Map<string, (typeof checks)[number]>();
   for (const c of checks) {
     const d = new Date(c.at.getTime() + 8 * 3600_000).toISOString().slice(0, 10);
@@ -48,6 +54,11 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
           <p className="text-sm text-ink-2">
             {acc.type === "PG" ? t("Payment gateway") : t("Bank")} · {cur} · {t("fee")} {n(acc.feePercent)}% + {n(acc.feeFixed).toFixed(2)}
           </p>
+          {settleFees._count > 0 && (
+            <p className="text-sm text-ink-2">
+              {t("Settlement fees {from} – {to}: {amount} ({n} times)", { from: range.from, to: range.to, amount: money(Math.abs(n(settleFees._sum.amount)), cur), n: settleFees._count })}
+            </p>
+          )}
         </div>
         <div className="text-right">
           <div className="text-xs text-ink-2">{t("System balance now")}</div>
@@ -62,6 +73,9 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
             )}
             <Dialog label={t("Enter balance")} title={t("Real balance of {name}", { name: acc.name })} className="btn btn-primary">
               <BalanceForm acc={{ id: acc.id, name: acc.name, currency: cur }} t={t} today={days.find((d) => d.day === range.to) && range.to === todayStr() ? days.find((d) => d.day === range.to) : undefined} />
+            </Dialog>
+            <Dialog label={"+ " + t("Money changer")} title={t("Sell to or buy from a money changer")}>
+              <ExchangeForm accounts={accounts} channelId={acc.id} parties={changers.map((c) => c.party!)} />
             </Dialog>
             <Dialog label={"+ " + t("Other movement")} title={t("Money in or out of an account")}>
               <MoveForm accounts={accounts} t={t} allowAdjust={full} channelId={acc.id} />
@@ -122,7 +136,7 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
                 <input type="checkbox" name="feeAtSettlement" defaultChecked={acc.feeAtSettlement} className="mt-0.5 h-4 w-4 accent-[var(--brand)]" />
                 <span>
                   {t("Fee is taken when the PG pays out")}
-                  <span className="block text-xs text-muted">{t("Tick this if the PG balance goes up by the full deposit. Record the fee in “Transfer fee” when you record the settlement.")}</span>
+                  <span className="block text-xs text-muted">{t("Tick this if the PG balance goes up by the full deposit. Record the fee in “Transfer / settlement fee” when you record the settlement.")}</span>
                 </span>
               </label>
               <Field label={t("Starting balance ({cur})", { cur })}>
@@ -239,7 +253,8 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
             {moves.map((m) => (
               <li key={m.id} className="flex gap-3 px-4 py-2.5">
                 <div className="flex-1">
-                  <div>{m.note ?? m.kind}</div>
+                  <div>{t(MOVE_LABEL[m.kind] ?? m.kind)}</div>
+                  {(m.note || m.party) && <div className="text-xs text-ink-2">{moveDetail(m, cur, t)}</div>}
                   <div className="text-xs text-muted">
                     {dt(m.at)} · {m.userName}
                   </div>
