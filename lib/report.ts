@@ -28,6 +28,8 @@ export const METRICS: { key: string; label: string; kind: "money" | "count" | "p
   { key: "withdrawCount", label: tk("Withdrawal count"), kind: "count", explain: tk("Number of withdrawals."), get: (t) => t.withdrawCount },
   { key: "winlose", label: tk("Win/Loss"), kind: "money", explain: tk("Deposits − withdrawals."), get: (t) => t.winlose },
   { key: "wlPct", label: tk("W/L %"), kind: "pct", explain: tk("Win/Loss as a % of deposits."), get: (t) => (t.deposit ? (t.winlose / t.deposit) * 100 : 0) },
+  { key: "bet", label: tk("Bets"), kind: "money", explain: tk("Total bets placed, read from the platform API (connected brands only)."), get: (t) => t.bet },
+  { key: "gameWl", label: tk("Game W/L (platform)"), kind: "money", explain: tk("Win/loss on games as the platform reports it (connected brands only)."), get: (t) => t.gameWl },
   { key: "fees", label: tk("PG/bank fees"), kind: "money", explain: tk("Each PG/bank's fee rate applied to the deposits it received."), get: (t) => t.fees },
   { key: "promo", label: tk("Promotions"), kind: "money", explain: tk("Bonus amounts from promotion claims."), get: (t) => t.promo },
   { key: "expense", label: tk("Expenses"), kind: "money", explain: tk("Salary, advertising and other expense categories."), get: (t) => t.expense },

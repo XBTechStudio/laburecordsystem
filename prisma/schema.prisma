@@ -155,6 +155,8 @@ model Brand {
   rule        DividendRule?
   settlements Settlement[]
   imports     ImportBatch[]
+  platform    PlatformLink?
+  playerDays  PlayerDay[]
 }
 
 model Player {
@@ -176,6 +178,11 @@ model Player {
   lastDepositAt  DateTime?
   createdAt      DateTime  @default(now())
   importId       Int?
+  /// The player's id on the brand's platform (filled by the platform API sync).
+  extId          String?   @db.VarChar(40)
+  /// Registration time and referrer on the platform, when the API gives them.
+  registeredAt   DateTime?
+  referrer       String?   @db.VarChar(80)
 
   brand      Brand           @relation(fields: [brandId], references: [id])
   assignedTo User?           @relation("AssignedStaff", fields: [assignedToId], references: [id], onDelete: SetNull)
@@ -186,8 +193,10 @@ model Player {
   awards     PromoAward[]
   alerts     Alert[]
   boxes      BoxEntry[]
+  days       PlayerDay[]
 
   @@unique([brandId, username])
+  @@unique([brandId, extId])
   @@index([phoneKey])
   @@index([brandId, lastDepositAt])
   @@index([brandId, depositTotal])
@@ -210,6 +219,8 @@ model Txn {
   payAccount  String?  @db.VarChar(60)
   createdById Int?
   importId    Int?
+  /// Set on transactions read from the platform API: the platform's bank/method it came through (see PlatformLink.channelMap).
+  source      String?  @db.VarChar(80)
   createdAt   DateTime @default(now())
 
   brand     Brand       @relation(fields: [brandId], references: [id])
@@ -382,6 +393,8 @@ model PromoClaim {
   claimedAt   DateTime
   createdById Int?
   importId    Int?
+  /// The platform's transaction id when the claim came from the platform API.
+  ref         String?  @db.VarChar(80)
   createdAt   DateTime @default(now())
 
   boxRelease BoxEntry?
@@ -390,6 +403,7 @@ model PromoClaim {
   player    Player    @relation(fields: [playerId], references: [id], onDelete: Cascade)
   createdBy User?     @relation("ClaimEnteredBy", fields: [createdById], references: [id], onDelete: SetNull)
 
+  @@unique([promotionId, ref])
   @@index([promotionId, claimedAt])
   @@index([playerId, claimedAt])
   @@index([importId])
@@ -680,4 +694,65 @@ model BoxEntry {
   @@index([playerId, promotionId, at])
   @@index([brandId, at])
   @@index([importId])
+}
+
+// ---------- platform API ----------
+
+/// A brand's connection to its gaming platform's API. Deposits, withdrawals, bonus claims, players and daily bets are read from it on a timer.
+model PlatformLink {
+  id           Int       @id @default(autoincrement())
+  brandId      Int       @unique
+  apiUrl       String    @db.VarChar(200)
+  merchantId   String    @db.VarChar(40)
+  accessId     String    @db.VarChar(80)
+  /// Access token, encrypted with the app secret (lib/secret-box.ts).
+  tokenEnc     String    @db.Text
+  /// The platform's own time zone: its date filters and daily reports use it.
+  timeZone     String    @default("Australia/Sydney") @db.VarChar(60)
+  enabled      Boolean   @default(false)
+  syncTxns     Boolean   @default(true)
+  syncClaims   Boolean   @default(true)
+  syncPlayers  Boolean   @default(true)
+  syncBets     Boolean   @default(true)
+  /// Nothing before this is read, so it doesn't overlap with what staff entered by hand.
+  startAt      DateTime
+  /// Every transaction created before this has been read.
+  txnCursor    DateTime?
+  /// Last time the last two days were read again for late-completing transactions.
+  deepAt       DateTime?
+  /// Newest registration already read.
+  playerCursor DateTime?
+  /// Daily bets: every day up to and including this one (platform date, YYYY-MM-DD) is complete.
+  betDay       String?   @db.VarChar(10)
+  betAt        DateTime?
+  /// Platform bank / payment method → our PG/bank account: { "<key>": { "id": channelId, "label": "…" } }.
+  channelMap   Json?
+  lastRunAt    DateTime?
+  lastOkAt     DateTime?
+  lastError    String?   @db.VarChar(500)
+  /// What the last run added: { txns, claims, players, bets, at }.
+  lastResult   Json?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+}
+
+/// One player's bets and game win/loss for one platform day, from the platform API.
+model PlayerDay {
+  id       Int      @id @default(autoincrement())
+  brandId  Int
+  playerId Int
+  day      DateTime @db.Date
+  bet      Decimal  @db.Decimal(16, 2)
+  /// As the platform reports it.
+  winlose  Decimal  @db.Decimal(16, 2)
+  /// Per game provider: { "<site>": { "bet": n, "winlose": n } }.
+  sites    Json?
+
+  brand  Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, day])
+  @@index([brandId, day])
 }

@@ -18,10 +18,13 @@ export type DayRow = {
   promo: number;
   expense: number;
   income: number;
+  /** From the platform API (connected brands only): total bets and the platform's game win/loss. */
+  bet: number;
+  gameWl: number;
 };
 
-const MONEY: (keyof DayRow)[] = ["deposit", "withdraw", "fees", "promo", "expense", "income"];
-const NUMS = ["deposit", "depositCount", "withdraw", "withdrawCount", "fees", "promo", "expense", "income"] as const;
+const MONEY: (keyof DayRow)[] = ["deposit", "withdraw", "fees", "promo", "expense", "income", "bet", "gameWl"];
+const NUMS = ["deposit", "depositCount", "withdraw", "withdrawCount", "fees", "promo", "expense", "income", "bet", "gameWl"] as const;
 
 export type Totals = Record<(typeof NUMS)[number], number> & { winlose: number; cost: number; profit: number };
 
@@ -35,7 +38,7 @@ export async function dailyRows(brandIds: number[], r: Range): Promise<DayRow[]>
   const d0 = dateOnly(r.from);
   const d1 = dateOnly(r.to);
 
-  const [txns, fees, claims, exps] = await Promise.all([
+  const [txns, fees, claims, exps, bets] = await Promise.all([
     prisma.$queryRaw<{ brandId: number; d: Date; type: string; amt: unknown; cnt: bigint }[]>`
       SELECT brandId, DATE(DATE_ADD(txnAt, INTERVAL 8 HOUR)) AS d, type, SUM(amount) AS amt, COUNT(*) AS cnt
       FROM \`Txn\` WHERE brandId IN (${ids}) AND txnAt >= ${t0} AND txnAt < ${t1}
@@ -56,6 +59,11 @@ export async function dailyRows(brandIds: number[], r: Range): Promise<DayRow[]>
       FROM \`Expense\` e JOIN \`ExpenseCategory\` c ON c.id = e.categoryId
       WHERE e.brandId IN (${ids}) AND e.date >= ${d0} AND e.date <= ${d1}
       GROUP BY e.brandId, d, c.kind`,
+    // Daily bets come per platform day and are used as they are.
+    prisma.$queryRaw<{ brandId: number; d: Date; bet: unknown; wl: unknown }[]>`
+      SELECT brandId, day AS d, SUM(bet) AS bet, SUM(winlose) AS wl
+      FROM \`PlayerDay\` WHERE brandId IN (${ids}) AND day >= ${d0} AND day <= ${d1}
+      GROUP BY brandId, day`,
   ]);
 
   const map = new Map<string, DayRow>();
@@ -81,6 +89,11 @@ export async function dailyRows(brandIds: number[], r: Range): Promise<DayRow[]>
   }
   for (const f of fees) get(f.brandId, f.d).fees += n(f.fee as number);
   for (const c of claims) get(c.brandId, c.d).promo += n(c.amt as number);
+  for (const b of bets) {
+    const row = get(b.brandId, b.d);
+    row.bet += n(b.bet as number);
+    row.gameWl += n(b.wl as number);
+  }
   for (const e of exps) {
     const row = get(e.brandId, e.d);
     if (e.kind === "INCOME") row.income += n(e.amt as number);

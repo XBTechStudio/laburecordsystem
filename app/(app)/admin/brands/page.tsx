@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ActionButton, ActionForm, Dialog, Submit } from "@/components/client";
 import { Card, Chip, Empty, Field, PageHeader, TableWrap } from "@/components/ui";
 import { can, requirePage } from "@/lib/auth";
@@ -44,6 +45,7 @@ export default async function BrandsPage() {
     prisma.userBrand.groupBy({ by: ["brandId"], _count: true }),
     getT(),
   ]);
+  const links = new Map((await prisma.platformLink.findMany({ select: { brandId: true, enabled: true, lastError: true } })).map((l) => [l.brandId, l]));
   const pc = new Map(players.map((p) => [p.brandId, p._count]));
   const sc = new Map(staff.map((s) => [s.brandId, s._count]));
   const base = settings.baseCurrency;
@@ -79,6 +81,7 @@ export default async function BrandsPage() {
                   <th className="r">{t("Players")}</th>
                   <th className="r">{t("Staff with access")}</th>
                   <th>{t("Status")}</th>
+                  <th>{t("Platform API")}</th>
                   {manage && <th />}
                 </tr>
               </thead>
@@ -97,6 +100,19 @@ export default async function BrandsPage() {
                     <td className="r">{count(pc.get(b.id) ?? 0)}</td>
                     <td className="r">{count(sc.get(b.id) ?? 0)}</td>
                     <td>{b.active ? <Chip tone="good">{t("Active")}</Chip> : <Chip>{t("Inactive")}</Chip>}</td>
+                    <td>
+                      {(() => {
+                        const l = links.get(b.id);
+                        const chip = !l ? <span className="text-muted">–</span> : !l.enabled ? <Chip>{t("Paused")}</Chip> : l.lastError ? <Chip tone="critical">{t("Error")}</Chip> : <Chip tone="good">{t("Running")}</Chip>;
+                        return manage ? (
+                          <Link href={`/admin/brands/${b.id}/platform`} className="hover:underline">
+                            {l ? chip : t("Connect")}
+                          </Link>
+                        ) : (
+                          chip
+                        );
+                      })()}
+                    </td>
                     {manage && (
                       <td className="r space-x-1">
                         <Dialog label={t("Edit")} title={t("Edit {name}", { name: b.name })}>

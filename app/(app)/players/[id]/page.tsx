@@ -49,6 +49,8 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
     can(user, "churn", 3) || canEdit ? prisma.user.findMany({ where: { active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }) : Promise.resolve([]),
     prisma.txn.findFirst({ where: { playerId: id }, orderBy: { txnAt: "asc" }, select: { txnAt: true } }),
   ]);
+  // Only for brands connected to their platform: bets over the last 30 days.
+  const bets = await prisma.playerDay.aggregate({ where: { playerId: id, day: { gte: new Date(Date.now() - 30 * 86400_000) } }, _sum: { bet: true } });
   const visibleTwins = twins.filter((t) => canSeeBrand(user, t.brandId));
   // Progress towards tracked promotions in their current periods, and bonuses not claimed yet.
   const [progress, openAwards] = await Promise.all([
@@ -100,6 +102,9 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
             {player.brand.name}
             {player.name && ` · ${player.name}`}
             {player.phone && ` · ${player.phone}`}
+            {player.registeredAt && ` · ${t("Registered {d}", { d: d10(player.registeredAt) })}`}
+            {player.referrer && ` · ${t("Referrer: {r}", { r: player.referrer })}`}
+            {bets._sum.bet != null && ` · ${t("Bets (last 30 days): {a}", { a: money0(n(bets._sum.bet), cur) })}`}
             {player.note && <span className="block text-muted">{player.note}</span>}
           </p>
         </div>
