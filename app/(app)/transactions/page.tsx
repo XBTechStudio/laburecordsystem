@@ -211,7 +211,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
                       </div>
                     </td>
                     {canEdit && (
-                      <EditCell kind="txn" id={tx.id} label={t("transaction")} allowed={rights.may(tx.createdById, tx.createdAt) && can(user, txnModule(tx.type), 2)} t={t}>
+                      <EditCell kind="txn" id={tx.id} label={t("transaction")} brand={scope.brandName(tx.brandId)} username={tx.player.username} allowed={rights.may(tx.createdById, tx.createdAt) && can(user, txnModule(tx.type), 2)} t={t}>
                         <TxnFields tx={tx} channels={chOpts} t={t} />
                       </EditCell>
                     )}

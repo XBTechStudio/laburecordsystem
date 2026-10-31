@@ -275,7 +275,7 @@ export default async function LuckyBoxPage({ searchParams }: { searchParams: Pro
                                       <td className="r">{(h.kind === "IN" ? "+ " : "− ") + money(h.amount, cur)}</td>
                                       <td className="text-ink-2">{h.note ?? ""}</td>
                                       <td className="text-ink-2">{h.createdBy?.name ?? (h.kind === "EXPIRE" ? t("System") : "–")}</td>
-                                      <EditCell kind="box" id={h.id} label={t("Lucky Box entry")} allowed={full || rights.may(h.createdById, h.createdAt)} t={t}>
+                                      <EditCell kind="box" id={h.id} label={t("Lucky Box entry")} brand={scope.brandName(s.brandId)} username={pl?.username ?? ""} allowed={full || rights.may(h.createdById, h.createdAt)} t={t}>
                                         <div className="grid grid-cols-2 gap-3">
                                           <Field label={t("Amount ({cur})", { cur })}>
                                             <input name="amount" className="input" defaultValue={n(h.amount)} inputMode="decimal" />

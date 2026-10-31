@@ -6,8 +6,8 @@ import { n } from "@/lib/format";
 import type { T } from "@/lib/i18n";
 import { deleteEntry, updateEntry } from "./actions";
 
-/** Edit and Delete for one saved entry, or an empty cell when the person isn't allowed to change it. */
-export function EditCell({ kind, id, label, allowed, t, children }: { kind: string; id: number; label: string; allowed: boolean; t: T; children: ReactNode }) {
+/** Edit and Delete for one saved entry, or an empty cell when the person isn't allowed to change it. The dialog opens with the brand and player it belongs to. */
+export function EditCell({ kind, id, label, brand, username, allowed, t, children }: { kind: string; id: number; label: string; brand: string; username: string; allowed: boolean; t: T; children: ReactNode }) {
   if (!allowed) return <td />;
   return (
     <td className="r space-x-1 whitespace-nowrap">
@@ -15,6 +15,12 @@ export function EditCell({ kind, id, label, allowed, t, children }: { kind: stri
         <ActionForm action={updateEntry} close className="space-y-3">
           <input type="hidden" name="kind" value={kind} />
           <input type="hidden" name="id" value={id} />
+          <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 rounded-lg bg-surface-2 px-3 py-2 text-sm">
+            <span className="text-muted">{t("Brand")}</span>
+            <b>{brand}</b>
+            <span className="text-muted">{t("Username")}</span>
+            <b className="break-words">{username}</b>
+          </div>
           {children}
           <div className="flex justify-end">
             <Submit>{t("Save")}</Submit>

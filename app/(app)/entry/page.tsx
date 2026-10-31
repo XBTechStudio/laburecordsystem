@@ -204,8 +204,8 @@ async function Recent({
   const canChange = rights.may;
   // Only worth a column when the list shows everyone's entries.
   const everyone = who === "all";
-  const actions = (id: number, allowed: boolean, form: ReactNode, label: string) => (
-    <EditCell kind={kind} id={id} label={label} allowed={allowed} t={t}>
+  const actions = (id: number, allowed: boolean, form: ReactNode, label: string, brandId: number, username: string) => (
+    <EditCell kind={kind} id={id} label={label} brand={brandName(brandId)} username={username} allowed={allowed} t={t}>
       {form}
     </EditCell>
   );
@@ -260,6 +260,8 @@ async function Recent({
                 canChange(tx.createdById, tx.createdAt) && can(user, txnModule(tx.type), 2),
                 <TxnFields tx={tx} channels={channels} t={t} />,
                 t("transaction"),
+                tx.brandId,
+                tx.player.username,
               )}
             </tr>
           ))}
@@ -308,6 +310,8 @@ async function Recent({
                   </Field>
                 </div>,
                 t("claim"),
+                c.promotion.brandId,
+                c.player.username,
               )}
             </tr>
           ))}
@@ -365,6 +369,8 @@ async function Recent({
                   </Field>
                 </div>,
                 t("Lucky Box entry"),
+                b.brandId,
+                b.player.username,
               )}
             </tr>
           ))}
@@ -417,6 +423,8 @@ async function Recent({
                   </Field>
                 </div>,
                 t("player"),
+                p.brandId,
+                p.username,
               )}
             </tr>
           ))}
