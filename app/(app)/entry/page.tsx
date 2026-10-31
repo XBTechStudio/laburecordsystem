@@ -1,3 +1,4 @@
+import { BrandFilter } from "@/components/brand-filter";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { BatchEntry, type Col } from "@/components/batch-entry";
@@ -66,7 +67,7 @@ export default async function EntryPage({ searchParams }: { searchParams: Promis
       },
       { key: "amount", label: t("Amount"), type: "amount", required: true, width: "7rem" },
       { key: "time", label: t("Date & time"), type: "datetime", width: "11rem" },
-      { key: "channel", label: t("PG / bank"), type: "pick", options: chPick, width: "10rem", placeholder: t("code or name") },
+      { key: "channel", label: t("PG / bank"), type: "pick", required: true, options: chPick, width: "10rem", placeholder: t("code or name") },
       { key: "payBank", label: t("Withdrawal bank"), type: "text", width: "9rem", placeholder: t("optional") },
       { key: "payAccount", label: t("Account no."), type: "text", width: "9rem", placeholder: t("optional") },
       { key: "note", label: t("Note"), type: "text", width: "9rem" },
@@ -431,6 +432,7 @@ async function Recent({
       note={`${total}${total === 200 ? "+" : ""} · ${who === "me" ? t("by you") : t("by everyone")}${rights.note ? " · " + rights.note : ""}`}
       action={
         <form action="/entry" className="flex items-center gap-2">
+          <BrandFilter />
           <input type="hidden" name="kind" value={kind} />
           {full && (
             <AutoSelect name="who" defaultValue={who} className="input h-8 w-auto">

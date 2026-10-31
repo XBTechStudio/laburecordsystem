@@ -94,5 +94,18 @@
 ["Type this on the entry form instead of the name, e.g. 01.","录入时打这个代号就会自动选上，例如 01。","Ketik kode ini di form input sebagai ganti nama, mis. 01."],
 ["Pressing Enter saves the form","按 Enter 直接保存","Tekan Enter langsung menyimpan"],
 ["Off = Enter goes to the next row and staff press Save at the end.","不勾 = 按 Enter 跳到下一行，最后再点保存。","Mati = Enter pindah ke baris berikutnya, lalu tekan Simpan di akhir."],
-["Press Enter to save.","按 Enter 直接保存。","Tekan Enter untuk menyimpan."]
+["Press Enter to save.","按 Enter 直接保存。","Tekan Enter untuk menyimpan."],
+["Account deleted.","账号已删除。","Akun dihapus."],
+["Account paused. They have been signed out and can't sign in.","账号已暂停，已登出，不能再登录。","Akun dijeda. Sudah dikeluarkan dan tidak bisa masuk."],
+["Account turned on. They can sign in again.","账号已启用，可以重新登录。","Akun diaktifkan. Bisa masuk lagi."],
+["avg {amount}","平均 {amount}","rata-rata {amount}"],
+["Change days","调整天数","Ubah hari"],
+["Channel name","名称","Nama"],
+["Choose the PG / bank","请选择 PG / 银行","Pilih PG / bank"],
+["Delete {name}'s account? This can't be undone.","删除 {name} 的账号？删除后不能恢复。","Hapus akun {name}? Tidak bisa dibatalkan."],
+["Pause","暂停","Jeda"],
+["Pause {name}'s account? They are signed out at once and can't sign in until you turn it back on.","暂停 {name} 的账号？会马上被登出，重新启用前都不能登录。","Jeda akun {name}? Langsung dikeluarkan dan tidak bisa masuk sampai diaktifkan lagi."],
+["Turn on","启用","Aktifkan"],
+["You can't delete your own account.","不能删除自己的账号。","Tidak bisa menghapus akun sendiri."],
+["This staff member has already entered data, so the account can't be deleted (their name stays on those records). Pause it instead.","这个员工已经录过数据，账号不能删除（那些记录要保留录入人名字）。请改用“暂停”。","Staf ini sudah pernah input data, jadi akunnya tidak bisa dihapus (namanya tetap tercatat). Gunakan Jeda saja."]
 ]

@@ -1,3 +1,4 @@
+import { BrandFilter } from "@/components/brand-filter";
 import Link from "next/link";
 import { ActionButton, ActionForm, Dialog, Submit } from "@/components/client";
 import { Card, Chip, Empty, Field, Info, PageHeader, TableWrap, Tabs } from "@/components/ui";
@@ -30,7 +31,7 @@ export default async function DividendsPage({ searchParams }: { searchParams: Pr
 
   return (
     <div className="max-w-6xl">
-      <PageHeader title={t("Shareholder dividends")} desc={t("Shares per brand, the rules for each brand's profit split, and what each shareholder is owed and has been paid.")} />
+      <PageHeader title={t("Shareholder dividends")} desc={t("Shares per brand, the rules for each brand's profit split, and what each shareholder is owed and has been paid.")} actions={<BrandFilter />} />
       <Tabs items={TABS.map(([k, label]) => ({ href: `/dividends?tab=${k}`, label: t(label), active: tab === k }))} />
       {tab === "overview" && <Overview ids={ids} rate={scope.rate} multi={!scope.current} currency={scope.currency} t={t} loc={loc} />}
       {tab === "settlements" && <Settlements ids={ids} manage={manage} brands={scope.brands} brandName={scope.brandName} brandCurrency={scope.brandCurrency} t={t} loc={loc} />}

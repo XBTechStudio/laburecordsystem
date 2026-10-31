@@ -105,6 +105,7 @@ export async function saveBatch(kind: string, brandId: number, rows: Row[], defa
         else if (!type) fail(i, "Choose Deposit or Withdrawal");
         else if (!can(user, txnModule(type), 2)) fail(i, type === "DEPOSIT" ? "Your role may not enter deposits" : "Your role may not enter withdrawals");
         else if (!(amt > 0)) fail(i, "Amount must be more than 0");
+        else if (!Number(r.channel)) fail(i, "Choose the PG / bank");
         else if (!at) fail(i, "Date/time isn't valid");
         return { username: r.player?.trim() ?? "", type: type as TxnType, amount: amt, txnAt: at!, channelId: Number(r.channel) || null, ref: r.ref?.trim() || null, note: r.note?.trim() || null, payBank: r.payBank?.trim().slice(0, 80) || null, payAccount: r.payAccount?.trim().slice(0, 60) || null };
       });

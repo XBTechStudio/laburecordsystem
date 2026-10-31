@@ -134,3 +134,43 @@ export async function deleteRole(_p: Result, fd: FormData) {
     revalidatePath("/admin/users");
   });
 }
+
+/** Pause or turn back on from the staff list. A paused account is signed out at once. */
+export async function setUserActive(_p: Result, fd: FormData) {
+  return run(async () => {
+    const me = await guard("users", 3);
+    const id = int(fd, "id");
+    const active = str(fd, "active") === "1";
+    need(!(id === me.id && !active), "You can't deactivate your own account.");
+    const u = await prisma.user.findUniqueOrThrow({ where: { id }, include: { role: true } });
+    if (u.role.locked && !active) need((await adminsLeft(id)) > 0, "At least one active Administrator must remain.");
+    await prisma.$transaction([prisma.user.update({ where: { id }, data: { active } }), ...(active ? [] : [prisma.session.deleteMany({ where: { userId: id } })])]);
+    await audit(me, "UPDATE", "User", id, null, active ? `Turned on staff ${u.name}` : `Paused staff ${u.name}`, { active });
+    revalidatePath("/admin/users");
+    if (active) return "Account turned on. They can sign in again.";
+    return "Account paused. They have been signed out and can't sign in.";
+  });
+}
+
+/** Delete a staff account that never entered anything; anyone with records keeps their name on them, so pause them instead. */
+export async function deleteUser(_p: Result, fd: FormData) {
+  return run(async () => {
+    const me = await guard("users", 3);
+    const id = int(fd, "id");
+    need(id !== me.id, "You can't delete your own account.");
+    const u = await prisma.user.findUniqueOrThrow({
+      where: { id },
+      include: { role: true, _count: { select: { txnsEntered: true, claimsEntered: true, boxesEntered: true, expensesEntered: true, contacts: true, alertsDone: true } } },
+    });
+    if (u.role.locked) need((await adminsLeft(id)) > 0, "At least one active Administrator must remain.");
+    const c = u._count;
+    need(
+      !(c.txnsEntered + c.claimsEntered + c.boxesEntered + c.expensesEntered + c.contacts + c.alertsDone),
+      "This staff member has already entered data, so the account can't be deleted (their name stays on those records). Pause it instead.",
+    );
+    await prisma.user.delete({ where: { id } });
+    await audit(me, "DELETE", "User", id, null, `Deleted staff ${u.name} (@${u.username})`, { roleId: u.roleId });
+    revalidatePath("/admin/users");
+    return "Account deleted.";
+  });
+}

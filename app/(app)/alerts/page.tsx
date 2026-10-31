@@ -1,3 +1,4 @@
+import { BrandFilter } from "@/components/brand-filter";
 import Link from "next/link";
 import type { AlertKind, Prisma } from "@prisma/client";
 import { ActionButton, AutoSelect, Dialog } from "@/components/client";
@@ -91,6 +92,7 @@ export default async function AlertsPage({ searchParams }: { searchParams: Promi
         ]}
       />
       <form action="/alerts" className="mb-4 flex flex-wrap gap-2">
+        <BrandFilter />
         {Object.entries(params)
           .filter(([k]) => k !== "kind" && k !== "who")
           .map(([k, v]) => (

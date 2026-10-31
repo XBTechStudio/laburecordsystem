@@ -126,7 +126,7 @@
 ["Password changed. Other devices have been signed out.","密码已修改，其他设备已退出登录。","Kata sandi diganti. Perangkat lain sudah dikeluarkan."],
 ["Password needs at least 8 characters.","密码至少需要 8 个字符。","Kata sandi minimal 8 karakter."],
 ["Password reset. They have been signed out and must use the new password.","密码已重设，对方已被退出登录，需要用新密码登录。","Kata sandi direset. Mereka sudah dikeluarkan dan harus memakai kata sandi baru."],
-["Payment gateway","支付通道","Payment gateway"],
+["Payment gateway","支付通道（PG）","Payment gateway (PG)"],
 ["Payment gateways and bank accounts","支付通道和银行账户","Payment gateway dan rekening bank"],
 ["Payment recorded.","付款已记录。","Pembayaran dicatat."],
 ["Payment to {name}","付款给 {name}","Pembayaran ke {name}"],

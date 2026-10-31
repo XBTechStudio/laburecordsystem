@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { AlertBell } from "@/components/alert-bell";
-import { BrandSwitcher, ThemeToggle } from "@/components/client";
+import { ThemeToggle } from "@/components/client";
 import { LangSwitcher } from "@/components/i18n";
 import { Shell, type NavGroup } from "@/components/shell";
 import { getsAlerts } from "@/lib/alerts";
@@ -11,7 +11,7 @@ import { MODULES, type Module } from "@/lib/perms";
 import { getScope } from "@/lib/scope";
 import { getSettings } from "@/lib/settings";
 import { setLang } from "../lang-action";
-import { logout, setBrand } from "./shell-actions";
+import { logout } from "./shell-actions";
 
 const GROUPS: { group: string; modules: Module[] }[] = [
   { group: tk("Overview"), modules: ["dashboard"] },
@@ -37,8 +37,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const top = (
     <>
-      <BrandSwitcher brands={scope.brands.map((b) => ({ id: b.id, name: b.name }))} current={scope.current?.id ?? null} action={setBrand} />
-      {scope.current && scope.current.currency !== settings.baseCurrency && <span className="chip bg-surface-2 text-ink-2">{scope.current.currency}</span>}
       <div className="ml-auto flex items-center gap-1">
         {getsAlerts(user, settings) && <AlertBell pollSeconds={settings.alerts.pollSeconds} popup={settings.alerts.popup} sound={settings.alerts.sound} />}
         <div className="hidden sm:block">

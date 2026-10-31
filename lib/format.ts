@@ -18,6 +18,9 @@ export const sym = (cur = "MYR") => SYMBOL[cur] ?? cur;
 export const money = (v: Num, cur?: string) => `${sym(cur)} ${two.format(n(v))}`;
 export const money0 = (v: Num, cur?: string) => `${sym(cur)} ${zero.format(Math.round(n(v)))}`;
 export const count = (v: Num) => int.format(n(v));
+/** Amounts without a currency sign, for tables whose currency is shown once above. */
+export const num2 = (v: Num) => two.format(n(v));
+export const num0 = (v: Num) => zero.format(Math.round(n(v)));
 export const pct = (v: number, digits = 1) => (Number.isFinite(v) ? `${v.toFixed(digits)}%` : "–");
 export const ratio = (a: number, b: number) => (b ? (a / b) * 100 : 0);
 

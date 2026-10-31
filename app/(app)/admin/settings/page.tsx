@@ -303,7 +303,7 @@ function ChannelForm({ c, t, base }: { c?: { id: number; name: string; code: str
     <ActionForm action={saveChannel} close className="space-y-3">
       {c && <input type="hidden" name="id" value={c.id} />}
       <div className="grid grid-cols-2 gap-3">
-        <Field label={t("Name")}>
+        <Field label={t("Channel name")}>
           <input name="name" className="input" defaultValue={c?.name} required placeholder={t("e.g. FPay, Maybank 1234")} />
         </Field>
         <Field label={t("Type")}>

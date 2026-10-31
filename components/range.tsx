@@ -1,17 +1,30 @@
 import Link from "next/link";
 import { PRESETS, type Range } from "@/lib/dates";
 import { getT } from "@/lib/i18n-server";
+import { BrandFilter } from "./brand-filter";
 
 /**
  * Date range picker that works without JavaScript: preset links plus a from/to form.
  * Other query params on the page are kept.
  */
-export async function RangeBar({ path, range, params = {} }: { path: string; range: Range & { preset?: string }; params?: Record<string, string | undefined> }) {
+export async function RangeBar({
+  path,
+  range,
+  params = {},
+  brand = true,
+}: {
+  path: string;
+  range: Range & { preset?: string };
+  params?: Record<string, string | undefined>;
+  /** Show the brand picker first in the row (off on pages about one account). */
+  brand?: boolean;
+}) {
   const keep = Object.entries(params).filter(([k, v]) => v && !["from", "to", "preset", "page"].includes(k)) as [string, string][];
   const t = await getT();
   const href = (q: Record<string, string>) => `${path}?${new URLSearchParams([...keep, ...Object.entries(q)])}`;
   return (
     <div className="flex flex-wrap items-center gap-2">
+      {brand && <BrandFilter />}
       <div className="flex overflow-x-auto rounded-lg border border-line bg-surface-2 p-0.5">
         {PRESETS.map((p) => (
           <Link

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BrandFilter } from "@/components/brand-filter";
 import { AutoSelect } from "@/components/client";
 import { TierChip } from "@/components/tier";
 import { Card, Empty, Info, PageHeader, Pager, TableWrap } from "@/components/ui";
@@ -66,6 +67,7 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
         }
       />
       <form action="/players" className="mb-4 flex flex-wrap gap-2">
+        <BrandFilter />
         <input name="q" defaultValue={sp.q} className="input h-9 w-64" placeholder={t("Search username, name or phone")} />
         <AutoSelect name="tier" defaultValue={sp.tier ?? ""} className="input w-auto">
           <option value="">{t("All tiers")}</option>

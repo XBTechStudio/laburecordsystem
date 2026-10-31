@@ -146,7 +146,7 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <RangeBar path={`/reconcile/${acc.id}`} range={range} params={{}} />
+        <RangeBar brand={false} path={`/reconcile/${acc.id}`} range={range} params={{}} />
       </div>
       <Card flush title={t("Day by day")} note={t("Real balance shows on days it was checked")}>
         <TableWrap>

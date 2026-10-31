@@ -6,7 +6,7 @@ import { can, requirePage } from "@/lib/auth";
 import { txnModule } from "@/lib/perms";
 import { prisma } from "@/lib/db";
 import { editRights } from "@/lib/edit-rights";
-import { count, dt, money, n } from "@/lib/format";
+import { count, dt, money, n, num2 } from "@/lib/format";
 import { getT } from "@/lib/i18n-server";
 import { getScope } from "@/lib/scope";
 import { txnFilter } from "@/lib/txn-filter";
@@ -187,7 +187,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
               </thead>
               <tbody>
                 {rows.map((tx) => (
-                  <tr key={tx.id}>
+                  <tr key={tx.id} className={tx.type === "DEPOSIT" ? "row-dep" : "row-wd"}>
                     <td className="whitespace-nowrap text-ink-2">{dt(tx.txnAt)}</td>
                     {multi && <td className="text-ink-2">{scope.brandName(tx.brandId)}</td>}
                     <td className="font-medium">
@@ -196,7 +196,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
                       </Link>
                     </td>
                     <td>{tx.type === "DEPOSIT" ? <Chip tone="good">{t("Deposit")}</Chip> : <Chip tone="warning">{t("Withdrawal")}</Chip>}</td>
-                    <td className="r">{money(tx.amount, scope.brandCurrency(tx.brandId))}</td>
+                    <td className="r font-medium">{num2(tx.amount)}</td>
                     <td className="text-ink-2">{tx.channel?.name ?? "–"}</td>
                     <td className="whitespace-nowrap text-ink-2">{payTo(tx)}</td>
                     <td className="max-w-48 truncate text-ink-2" title={tx.note ?? undefined}>

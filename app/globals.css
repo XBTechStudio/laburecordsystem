@@ -38,6 +38,13 @@
   --side-hover: #f0efec;
   --side-active-bg: #e6eefa;
   --side-active-ink: #1c5cab;
+  /* Report columns and transaction rows: brand purple, deposits blue, withdrawals red, fees teal. */
+  --c-brand: #7a3db8;
+  --c-dep: #1c5cab;
+  --c-wd: #b02727;
+  --c-fee: #0e7f86;
+  --dep-soft: #eaf1fb;
+  --wd-soft: #fbecec;
 }
 
 /* Light by default; dark only when the user picks it. */
@@ -58,6 +65,12 @@
   --brand-hover: #3987e5;
   --brand-soft: #16304f;
   --brand-ink: #86b6ef;
+  --c-brand: #b893ea;
+  --c-dep: #79aef0;
+  --c-wd: #ef8080;
+  --c-fee: #45c6cc;
+  --dep-soft: #16253a;
+  --wd-soft: #351c1c;
   --series-1: #3987e5;
   --series-2: #d95926;
   --series-3: #199e70;
@@ -159,6 +172,13 @@ body {
   }
   .tbl tbody tr:hover td {
     @apply bg-surface-2/50;
+  }
+  /* Whole-row tint on the Transactions list: deposits blue, withdrawals red. */
+  .tbl tr.row-dep td {
+    background: var(--dep-soft);
+  }
+  .tbl tr.row-wd td {
+    background: var(--wd-soft);
   }
   .tbl .r {
     @apply text-right whitespace-nowrap;

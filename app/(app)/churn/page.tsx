@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ActionButton, AutoSelect, Dialog } from "@/components/client";
+import { BrandFilter } from "@/components/brand-filter";
 import { ContactForm } from "@/components/contact-form";
 import { TierChip } from "@/components/tier";
 import { Card, Chip, Empty, Info, PageHeader, Pager, TableWrap } from "@/components/ui";
@@ -93,8 +94,14 @@ export default async function ChurnPage({ searchParams }: { searchParams: Promis
             </span>
           </Link>
         ))}
+        {can(user, "settings", 3) && (
+          <Link href="/admin/settings?tab=followup" className="ml-auto self-center px-2 text-xs text-ink-2 hover:text-ink hover:underline">
+            {t("Change days")}
+          </Link>
+        )}
       </div>
       <form action="/churn" className="mb-4 flex flex-wrap gap-2">
+        <BrandFilter />
         <input type="hidden" name="band" value={tab.key} />
         <AutoSelect name="tier" defaultValue={sp.tier ?? ""} className="input w-auto">
           <option value="">{t("All tiers")}</option>
@@ -155,7 +162,10 @@ export default async function ChurnPage({ searchParams }: { searchParams: Promis
                         <TierChip name={tier.name} rank={tier.rank} />
                       </td>
                       <td className="r">
-                        {money0(p.depositTotal, scope.brandCurrency(p.brandId))} <span className="text-xs text-muted">×{p.depositCount}</span>
+                        <div>
+                          {money0(p.depositTotal, scope.brandCurrency(p.brandId))} <span className="text-xs text-muted">×{p.depositCount}</span>
+                        </div>
+                        {p.depositCount > 0 && <div className="text-xs text-muted">{t("avg {amount}", { amount: money0(p.depositTotal / p.depositCount, scope.brandCurrency(p.brandId)) })}</div>}
                       </td>
                       <td className="whitespace-nowrap">
                         <span className={idle >= days[days.length - 1] ? "font-medium text-critical-ink" : ""}>{t("{n} days ago", { n: idle })}</span>

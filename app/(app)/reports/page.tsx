@@ -5,13 +5,24 @@ import { Card, Empty, Field, Info, PageHeader, TableWrap } from "@/components/ui
 import { can, requirePage } from "@/lib/auth";
 import { parseRange } from "@/lib/dates";
 import { prisma } from "@/lib/db";
-import { count, money0, pct } from "@/lib/format";
+import { count, num0, pct } from "@/lib/format";
 import type { T } from "@/lib/i18n";
 import { getT } from "@/lib/i18n-server";
 import { buildReport, GROUPS, METRICS, parseCols, type Group } from "@/lib/report";
 import { getScope } from "@/lib/scope";
 import { getSettings } from "@/lib/settings";
 import { deleteReport, saveReport } from "./actions";
+
+/** Each money column keeps its own colour from top to bottom, so the eye finds it quickly. */
+const TONE: Record<string, string> = {
+  brand: "text-[var(--c-brand)]",
+  deposit: "text-[var(--c-dep)]",
+  depositCount: "text-[var(--c-dep)]",
+  withdraw: "text-[var(--c-wd)]",
+  withdrawCount: "text-[var(--c-wd)]",
+  winlose: "text-ink",
+  fees: "text-[var(--c-fee)]",
+};
 
 export default async function ReportsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const user = await requirePage("reports");
@@ -32,7 +43,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const cur = scope.currency;
   const qs = new URLSearchParams({ group, cols: cols.join(","), ...(range.preset ? { preset: range.preset } : { from: range.from, to: range.to }) });
   const savedHref = (c: Record<string, string | null>) => `/reports?${new URLSearchParams(Object.entries(c).filter(([, v]) => v) as [string, string][])}`;
-  const fmt = (kind: string, v: number) => (kind === "money" ? money0(v, cur) : kind === "pct" ? pct(v) : count(v));
+  // Plain numbers: the currency is in the page subtitle.
+  const fmt = (kind: string, v: number) => (kind === "money" ? num0(v) : kind === "pct" ? pct(v) : count(v));
   const empty = report.total.depositCount + report.total.withdrawCount + report.total.expense + report.total.fees + report.total.promo === 0;
   const rangeFields = range.preset ? (
     <input type="hidden" name="preset" value={range.preset} />
@@ -139,9 +151,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
             <table className="tbl">
               <thead>
                 <tr>
-                  <th>{t(GROUPS.find((g) => g.key === group)!.col)}</th>
+                  <th className={group === "brand" ? TONE.brand : ""}>{t(GROUPS.find((g) => g.key === group)!.col)}</th>
                   {metrics.map((m) => (
-                    <th key={m.key} className="r">
+                    <th key={m.key} className={`r ${TONE[m.key] ?? ""}`}>
                       {t(m.label)} <Info>{t(m.explain)}</Info>
                     </th>
                   ))}
@@ -150,11 +162,11 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
               <tbody>
                 {report.lines.map((l) => (
                   <tr key={l.key}>
-                    <td className="font-medium whitespace-nowrap">{l.label}</td>
+                    <td className={`font-medium whitespace-nowrap ${group === "brand" ? TONE.brand : ""}`}>{l.label}</td>
                     {metrics.map((m) => {
                       const v = m.get(l.t);
                       return (
-                        <td key={m.key} className={`r ${(m.key === "profit" || m.key === "winlose" || m.key === "margin") && v < 0 ? "text-critical-ink" : ""} ${v === 0 ? "text-muted" : ""}`}>
+                        <td key={m.key} className={`r ${(m.key === "profit" || m.key === "winlose" || m.key === "margin") && v < 0 ? "text-critical-ink" : (TONE[m.key] ?? "")} ${v === 0 ? "opacity-50" : ""}`}>
                           {fmt(m.kind, v)}
                         </td>
                       );
@@ -168,7 +180,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                   {metrics.map((m) => {
                     const v = m.get(report.total);
                     return (
-                      <td key={m.key} className={`r ${(m.key === "profit" || m.key === "winlose") && v < 0 ? "text-critical-ink" : ""}`}>
+                      <td key={m.key} className={`r ${(m.key === "profit" || m.key === "winlose") && v < 0 ? "text-critical-ink" : (TONE[m.key] ?? "")}`}>
                         {fmt(m.kind, v)}
                       </td>
                     );

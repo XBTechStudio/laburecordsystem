@@ -7,7 +7,7 @@ import { dt } from "@/lib/format";
 import type { T } from "@/lib/i18n";
 import { getT } from "@/lib/i18n-server";
 import { LEVELS, MODULES, levelOf, type Perms } from "@/lib/perms";
-import { createUser, deleteRole, resetPassword, saveRole, updateUser } from "./actions";
+import { createUser, deleteRole, deleteUser, resetPassword, saveRole, setUserActive, updateUser } from "./actions";
 
 function BrandAccess({ brands, all, picked, t }: { brands: Brand[]; all: boolean; picked: number[]; t: T }) {
   return (
@@ -230,6 +230,26 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
                             </div>
                           </ActionForm>
                         </Dialog>
+                        {u.id !== user.id && (
+                          <>
+                            {u.active ? (
+                              <ActionButton
+                                action={setUserActive}
+                                fields={{ id: u.id, active: 0 }}
+                                question={t("Pause {name}'s account? They are signed out at once and can't sign in until you turn it back on.", { name: u.name })}
+                              >
+                                {t("Pause")}
+                              </ActionButton>
+                            ) : (
+                              <ActionButton action={setUserActive} fields={{ id: u.id, active: 1 }}>
+                                {t("Turn on")}
+                              </ActionButton>
+                            )}
+                            <ActionButton action={deleteUser} fields={{ id: u.id }} question={t("Delete {name}'s account? This can't be undone.", { name: u.name })} className="btn btn-sm text-critical-ink">
+                              {t("Delete")}
+                            </ActionButton>
+                          </>
+                        )}
                       </td>
                     )}
                   </tr>
