@@ -216,7 +216,9 @@ async function saveTxns(link: PlatformLink & { brand: { name: string; currency: 
 async function syncTxns(link: PlatformLink & { brand: { name: string; currency: string } }, c: Creds, out: SyncResult, map: ChannelMap) {
   const now = new Date();
   const deep = !link.deepAt || now.getTime() - link.deepAt.getTime() > HOUR;
-  let from = link.txnCursor ? new Date(link.txnCursor.getTime() - (deep ? DEEP_LOOKBACK : LOOKBACK)) : link.startAt;
+  // While catching up on old history nothing is still pending, so there is nothing to read again.
+  const catchingUp = link.txnCursor && now.getTime() - link.txnCursor.getTime() > DEEP_LOOKBACK;
+  let from = link.txnCursor ? new Date(link.txnCursor.getTime() - (catchingUp ? 0 : deep ? DEEP_LOOKBACK : LOOKBACK)) : link.startAt;
   if (from < link.startAt) from = link.startAt;
   let cursor = link.txnCursor;
   // Only the types we keep: the platform also lists forfeits and other rows, often most of a day's pages.
