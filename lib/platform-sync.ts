@@ -26,8 +26,10 @@ import { open } from "@/lib/secret-box";
 // same stretch twice never adds anything twice.
 
 const HOUR = 3600_000;
-/** Most result pages one run may read, so a long catch-up is spread over several runs. */
-const PAGE_BUDGET = 120;
+/** Most result pages one run may read, so a long catch-up is spread over several runs. Pages hold 10 rows; a busy day is ~130 pages. */
+const PAGE_BUDGET = 600;
+/** Transactions are read this much at a time, so a run that runs out of pages still keeps what it finished. */
+const WINDOW = 6 * HOUR;
 /** Transactions are re-read this far back on every run (pending ones complete late)… */
 const LOOKBACK = 2 * HOUR;
 /** …and once an hour this far back. */
@@ -209,7 +211,7 @@ async function saveTxns(link: PlatformLink & { brand: { name: string; currency: 
   return { txns, claims, players: players.created };
 }
 
-/** Deposits, withdrawals and bonus claims, read a day at a time from where the last run stopped. */
+/** Deposits, withdrawals and bonus claims, read six hours at a time from where the last run stopped. */
 async function syncTxns(link: PlatformLink & { brand: { name: string; currency: string } }, c: Creds, out: SyncResult, map: ChannelMap) {
   const now = new Date();
   const deep = !link.deepAt || now.getTime() - link.deepAt.getTime() > HOUR;
@@ -217,7 +219,7 @@ async function syncTxns(link: PlatformLink & { brand: { name: string; currency: 
   if (from < link.startAt) from = link.startAt;
   let cursor = link.txnCursor;
   while (from < now) {
-    const to = new Date(Math.min(from.getTime() + 24 * HOUR, now.getTime()));
+    const to = new Date(Math.min(from.getTime() + WINDOW, now.getTime()));
     const rows: PlatformTxn[] = [];
     let pages = 1;
     for (let p = 0; p < pages; p++) {
@@ -238,7 +240,7 @@ async function syncTxns(link: PlatformLink & { brand: { name: string; currency: 
     cursor = to;
     from = to;
   }
-  // The cursor moves past each fully read day, so a long catch-up continues where it stopped.
+  // The cursor moves past each fully read window, so a long catch-up continues where it stopped.
   const data: Prisma.PlatformLinkUpdateInput = { channelMap: map };
   if (cursor && (!link.txnCursor || cursor > link.txnCursor)) data.txnCursor = cursor;
   if (deep && !out.more) data.deepAt = now;
