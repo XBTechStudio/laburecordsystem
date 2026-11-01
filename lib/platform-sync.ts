@@ -372,10 +372,9 @@ export async function syncLink(linkId: number, force = false): Promise<SyncResul
   }
 }
 
-/** Every enabled brand, one after another. Called by the timer every 2 minutes. */
+/** Every enabled brand at the same time (each is its own platform). Called by the timer every 2 minutes, or right away while one is catching up. */
 export async function syncAll() {
   const links = await prisma.platformLink.findMany({ where: { enabled: true, brand: { active: true } }, select: { id: true, brandId: true } });
-  const result: Record<number, SyncResult & { error?: string }> = {};
-  for (const l of links) result[l.brandId] = await syncLink(l.id);
-  return result;
+  const runs = await Promise.all(links.map(async (l) => [l.brandId, await syncLink(l.id)] as const));
+  return Object.fromEntries(runs) as Record<number, SyncResult & { error?: string }>;
 }
