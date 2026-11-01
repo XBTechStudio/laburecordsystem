@@ -40,7 +40,18 @@ function explain(msg: string) {
   return msg;
 }
 
+/** Brands share one platform provider, which blocks our IP for a while when read too fast: at most 10 calls a second in all. */
+const GAP_MS = 100;
+let nextSlot = 0;
+async function slot() {
+  const now = Date.now();
+  const at = Math.max(now, nextSlot);
+  nextSlot = at + GAP_MS;
+  if (at > now) await new Promise((r) => setTimeout(r, at - now));
+}
+
 export async function call<T>(c: Creds, module: string, params: Record<string, string | number | undefined> = {}): Promise<T> {
+  await slot();
   const body = new URLSearchParams({ module, merchantId: c.merchantId, accessId: c.accessId, accessToken: c.token });
   for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== "") body.set(k, String(v));
   let res: Response;

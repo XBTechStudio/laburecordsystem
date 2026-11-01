@@ -26,8 +26,9 @@ import { open } from "@/lib/secret-box";
 // same stretch twice never adds anything twice.
 
 const HOUR = 3600_000;
-/** Most result pages one run may read, so a long catch-up is spread over several runs. Pages hold 10 rows; a busy day is ~130 pages. */
-const PAGE_BUDGET = 600;
+/** Most result pages one run may read, so a long catch-up is spread over several runs. Pages hold 10 rows; at 10 calls a second
+ *  shared by all brands (lib/platform-api.ts), five brands' runs still fit in the 2-minute timer. */
+const PAGE_BUDGET = 300;
 /** Transactions are read this much at a time, so a run that runs out of pages still keeps what it finished. */
 const WINDOW = 6 * HOUR;
 /** Transactions are re-read this far back on every run (pending ones complete late)… */
@@ -218,19 +219,24 @@ async function syncTxns(link: PlatformLink & { brand: { name: string; currency: 
   let from = link.txnCursor ? new Date(link.txnCursor.getTime() - (deep ? DEEP_LOOKBACK : LOOKBACK)) : link.startAt;
   if (from < link.startAt) from = link.startAt;
   let cursor = link.txnCursor;
+  // Only the types we keep: the platform also lists forfeits and other rows, often most of a day's pages.
+  const types = [...(link.syncTxns ? ["DEPOSIT", "WITHDRAW"] : []), ...(link.syncClaims ? ["BONUS"] : [])];
   while (from < now) {
     const to = new Date(Math.min(from.getTime() + WINDOW, now.getTime()));
     const rows: PlatformTxn[] = [];
-    let pages = 1;
-    for (let p = 0; p < pages; p++) {
-      if (out.pages >= PAGE_BUDGET) {
-        out.more = true;
-        break;
+    for (const type of types) {
+      let pages = 1;
+      for (let p = 0; p < pages; p++) {
+        if (out.pages >= PAGE_BUDGET) {
+          out.more = true;
+          break;
+        }
+        const page = await getTransactions(c, { sDate: platformTime(from, link.timeZone), eDate: platformTime(to, link.timeZone), pageIndex: p, type });
+        out.pages++;
+        pages = page.totalPage || 0;
+        rows.push(...(page.transactions ?? []));
       }
-      const page = await getTransactions(c, { sDate: platformTime(from, link.timeZone), eDate: platformTime(to, link.timeZone), pageIndex: p });
-      out.pages++;
-      pages = page.totalPage || 0;
-      rows.push(...(page.transactions ?? []));
+      if (out.more) break;
     }
     const r = await saveTxns(link, map, rows.filter((x) => new Date(x.createdDateTime) >= link.startAt));
     out.txns += r.txns;
@@ -372,7 +378,7 @@ export async function syncLink(linkId: number, force = false): Promise<SyncResul
   }
 }
 
-/** Every enabled brand at the same time (each is its own platform). Called by the timer every 2 minutes, or right away while one is catching up. */
+/** Every enabled brand at the same time (each is its own platform). Called by the timer every 2 minutes. */
 export async function syncAll() {
   const links = await prisma.platformLink.findMany({ where: { enabled: true, brand: { active: true } }, select: { id: true, brandId: true } });
   const runs = await Promise.all(links.map(async (l) => [l.brandId, await syncLink(l.id)] as const));
