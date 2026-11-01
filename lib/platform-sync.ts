@@ -212,7 +212,7 @@ async function saveTxns(link: PlatformLink & { brand: { name: string; currency: 
   return { txns, claims, players: players.created };
 }
 
-/** Deposits, withdrawals and bonus claims, read six hours at a time from where the last run stopped. */
+/** Deposits, withdrawals and bonus claims, read up to six hours at a time from where the last run stopped. */
 async function syncTxns(link: PlatformLink & { brand: { name: string; currency: string } }, c: Creds, out: SyncResult, map: ChannelMap) {
   const now = new Date();
   const deep = !link.deepAt || now.getTime() - link.deepAt.getTime() > HOUR;
@@ -221,28 +221,41 @@ async function syncTxns(link: PlatformLink & { brand: { name: string; currency: 
   let cursor = link.txnCursor;
   // Only the types we keep: the platform also lists forfeits and other rows, often most of a day's pages.
   const types = [...(link.syncTxns ? ["DEPOSIT", "WITHDRAW"] : []), ...(link.syncClaims ? ["BONUS"] : [])];
+  const read = (from: Date, to: Date, type: string, pageIndex: number) => {
+    out.pages++;
+    return getTransactions(c, { sDate: platformTime(from, link.timeZone), eDate: platformTime(to, link.timeZone), pageIndex, type });
+  };
   while (from < now) {
-    const to = new Date(Math.min(from.getTime() + WINDOW, now.getTime()));
-    const rows: PlatformTxn[] = [];
-    for (const type of types) {
-      let pages = 1;
-      for (let p = 0; p < pages; p++) {
-        if (out.pages >= PAGE_BUDGET) {
-          out.more = true;
-          break;
-        }
-        const page = await getTransactions(c, { sDate: platformTime(from, link.timeZone), eDate: platformTime(to, link.timeZone), pageIndex: p, type });
-        out.pages++;
-        pages = page.totalPage || 0;
-        rows.push(...(page.transactions ?? []));
+    let to = new Date(Math.min(from.getTime() + WINDOW, now.getTime()));
+    // Each type's first page says how many pages the window has. A window too big for a whole run is halved
+    // (busy stretches can be thousands of rows an hour); one that only doesn't fit what this run has left waits for the next run.
+    let firsts: { type: string; page: Awaited<ReturnType<typeof getTransactions>> }[] = [];
+    for (;;) {
+      if (out.pages + types.length > PAGE_BUDGET) {
+        out.more = true;
+        break;
       }
-      if (out.more) break;
+      firsts = [];
+      for (const type of types) firsts.push({ type, page: await read(from, to, type, 0) });
+      const rest = firsts.reduce((n, f) => n + Math.max((f.page.totalPage || 0) - 1, 0), 0);
+      if (out.pages + rest <= PAGE_BUDGET) break;
+      if (rest > PAGE_BUDGET - 4 * types.length && to.getTime() - from.getTime() > 15 * 60_000) {
+        to = new Date(from.getTime() + (to.getTime() - from.getTime()) / 2);
+        continue;
+      }
+      out.more = true;
+      break;
+    }
+    if (out.more) break;
+    const rows: PlatformTxn[] = [];
+    for (const { type, page } of firsts) {
+      rows.push(...(page.transactions ?? []));
+      for (let p = 1; p < (page.totalPage || 0); p++) rows.push(...((await read(from, to, type, p)).transactions ?? []));
     }
     const r = await saveTxns(link, map, rows.filter((x) => new Date(x.createdDateTime) >= link.startAt));
     out.txns += r.txns;
     out.claims += r.claims;
     out.players += r.players;
-    if (out.more) break;
     cursor = to;
     from = to;
   }
