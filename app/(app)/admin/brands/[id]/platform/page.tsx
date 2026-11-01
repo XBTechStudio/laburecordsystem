@@ -154,12 +154,13 @@ export default async function PlatformPage({ params }: { params: Promise<{ id: s
               <input name="startAt" type="datetime-local" className="input" defaultValue={toLocalInput(link?.startAt ?? new Date())} required />
             </Field>
             <Field label={t("Platform time zone")} hint={t("The platform's own clock; its daily bets are per day in this zone.")}>
-              <input name="timeZone" className="input" list="zones" defaultValue={link?.timeZone ?? "Australia/Sydney"} required />
-              <datalist id="zones">
-                {ZONES.map((z) => (
-                  <option key={z} value={z} />
+              <select name="timeZone" className="input" defaultValue={link?.timeZone ?? "Australia/Sydney"} required>
+                {(link && !ZONES.includes(link.timeZone) ? [link.timeZone, ...ZONES] : ZONES).map((z) => (
+                  <option key={z} value={z}>
+                    {z}
+                  </option>
                 ))}
-              </datalist>
+              </select>
             </Field>
           </div>
           <fieldset>

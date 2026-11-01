@@ -27,8 +27,10 @@ async function main() {
     prisma.contactLog.deleteMany(),
     prisma.promoClaim.deleteMany(),
     prisma.promotion.deleteMany(),
+    prisma.playerDay.deleteMany(),
     prisma.txn.deleteMany(),
     prisma.channelMove.deleteMany(),
+    prisma.statementDay.deleteMany(),
     prisma.balanceCheck.deleteMany(),
     prisma.expense.deleteMany(),
     prisma.player.deleteMany(),
@@ -38,6 +40,7 @@ async function main() {
     prisma.userBrand.deleteMany(),
     prisma.session.deleteMany({ where: { user: { username: { not: "admin" } } } }),
     prisma.user.deleteMany({ where: { username: { not: "admin" } } }),
+    prisma.platformLink.deleteMany(),
     prisma.brand.deleteMany(),
     prisma.auditLog.deleteMany(),
   ]);
