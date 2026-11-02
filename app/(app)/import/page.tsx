@@ -28,7 +28,7 @@ export default async function ImportPage() {
         desc={t("Upload an export from any platform. The system matches the columns, shows you a preview, and skips rows that are already in.")}
         actions={
           <Link href="/entry" className="btn">
-            ← {t("Data entry")}
+            ← {t("Deposits & withdrawals")}
           </Link>
         }
       />

@@ -97,12 +97,12 @@ export default async function LuckyBoxPage({ searchParams }: { searchParams: Pro
           <>
             {t("Winnings players can't withdraw yet, and when they can have them back.")}{" "}
             <Info>
-              {t("Staff put the points into the box under Data entry → Lucky Box (after taking them off the player on the platform). The system checks every deposit and withdrawal against the promotion's release rule and tells CS how much to give back. After adding the points on the platform, press Release here or on the alert. A release is also recorded as a claim of the promotion, so it counts as promotion cost.")}
+              {t("Staff put the points into the box with Put into a box (after taking them off the player on the platform). The system checks every deposit and withdrawal against the promotion's release rule and tells CS how much to give back. After adding the points on the platform, press Release here or on the alert. A release is also recorded as a claim of the promotion, so it counts as promotion cost.")}
             </Info>
           </>
         }
         actions={
-          <Link href="/entry?kind=box" className="btn btn-primary">
+          <Link href="/lucky-box/add" className="btn btn-primary">
             + {t("Put into a box")}
           </Link>
         }
@@ -155,7 +155,7 @@ export default async function LuckyBoxPage({ searchParams }: { searchParams: Pro
       {allPromos.length === 0 ? (
         <Card>
           <Empty title={t("No Lucky Box promotions yet")}>
-            {t("Turn one on under Promotions → Lucky Box, or type a new promotion name under Data entry → Lucky Box.")}
+            {t("Turn one on under Promotions → Lucky Box, or type a new promotion name under Put into a box.")}
           </Empty>
         </Card>
       ) : (

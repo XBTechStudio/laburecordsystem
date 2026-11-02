@@ -3,7 +3,7 @@ import { BrandFilter } from "@/components/brand-filter";
 import { AutoSelect } from "@/components/client";
 import { TierChip } from "@/components/tier";
 import { Card, Empty, Info, PageHeader, Pager, TableWrap } from "@/components/ui";
-import { requirePage } from "@/lib/auth";
+import { can, requirePage } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { ago, count, d10, money0 } from "@/lib/format";
 import { queryPlayers, tierName, tierOptions } from "@/lib/player-query";
@@ -61,9 +61,16 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
           </>
         }
         actions={
-          <a className="btn" href={`/api/export/players?${new URLSearchParams(params)}`}>
-            ⬇ {t("Export Excel")}
-          </a>
+          <>
+            <a className="btn" href={`/api/export/players?${new URLSearchParams(params)}`}>
+              ⬇ {t("Export Excel")}
+            </a>
+            {can(user, "entry", 2) && (
+              <Link href="/players/add" className="btn btn-primary">
+                + {t("Add players")}
+              </Link>
+            )}
+          </>
         }
       />
       <form action="/players" className="mb-4 flex flex-wrap gap-2">

@@ -75,5 +75,7 @@
 ["Saved, but the connection test failed:","已保存，但连接测试失败：","Tersimpan, tetapi uji koneksi gagal:"],
 ["Saved. {n} transactions moved to the chosen accounts.","已保存，{n} 笔交易已改到选择的账户。","Tersimpan. {n} transaksi dipindahkan ke akun yang dipilih."],
 ["A sync for this brand is already running.","这个品牌正在同步中。","Sinkronisasi untuk merek ini sedang berjalan."],
-["The platform did not accept the Access ID / token / merchant ID, or this call isn't enabled for the key.","平台不接受这组 Access ID / Token / Merchant ID，或这组 key 没开这个接口的权限。","Platform tidak menerima Access ID / token / merchant ID, atau panggilan ini tidak diaktifkan untuk key tersebut."]
+["The platform did not accept the Access ID / token / merchant ID, or this call isn't enabled for the key.","平台不接受这组 Access ID / Token / Merchant ID，或这组 key 没开这个接口的权限。","Platform tidak menerima Access ID / token / merchant ID, atau panggilan ini tidak diaktifkan untuk key tersebut."],
+["Add players","新增玩家","Tambah pemain"],
+["Enter a day's data in one go.","一次录入一整天的数据。","Input data satu hari sekaligus."]
 ]

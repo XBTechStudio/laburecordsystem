@@ -13,8 +13,8 @@ function NavList({ nav, onPick }: { nav: NavGroup[]; onPick?: () => void }) {
   return (
     <>
       {nav.map((g) => (
-        <div key={g.group} className="mb-4">
-          <div className="px-2 pb-1 text-[11px] tracking-wider text-[var(--side-muted)] uppercase">{g.group}</div>
+        <div key={g.group || "-"} className="mb-4">
+          {g.group && <div className="px-2 pb-1 text-[11px] tracking-wider text-[var(--side-muted)] uppercase">{g.group}</div>}
           {g.items.map((it) => (
             <Link
               key={it.href}

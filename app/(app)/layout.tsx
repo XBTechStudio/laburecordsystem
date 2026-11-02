@@ -15,24 +15,32 @@ import { logout } from "./shell-actions";
 
 const GROUPS: { group: string; modules: Module[] }[] = [
   { group: tk("Overview"), modules: ["dashboard"] },
-  { group: tk("Data"), modules: ["entry", "import", "transactions"] },
-  { group: tk("Analysis"), modules: ["reports", "players", "alerts", "churn", "promotions", "luckybox", "cs"] },
+  { group: tk("Data"), modules: ["players", "entry", "luckybox", "transactions"] },
+  { group: tk("Analysis"), modules: ["reports", "alerts", "churn", "promotions", "cs"] },
   { group: tk("Finance"), modules: ["reconcile", "expenses", "dividends"] },
   { group: tk("Admin"), modules: ["brands", "users", "audit", "settings"] },
+  // At the very bottom, under no heading.
+  { group: "", modules: ["import"] },
 ];
+
+/** Players and Lucky Box also take staff who may only enter data straight to their entry forms. */
+const ENTRY_ONLY: Partial<Record<Module, string>> = { players: "/players/add", luckybox: "/lucky-box/add" };
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
   const [settings, scope, t] = await Promise.all([getSettings(), getScope(user), getT()]);
 
+  const entry = can(user, "entry", 2);
   const nav: NavGroup[] = GROUPS.map((g) => ({
-    group: t(g.group),
-    items: g.modules
-      .filter((m) => can(user, m))
-      .map((m) => {
-        const mod = MODULES.find((x) => x.key === m)!;
-        return { href: mod.href, label: t(mod.label) };
-      }),
+    group: g.group && t(g.group),
+    items: g.modules.flatMap((m) => {
+      const mod = MODULES.find((x) => x.key === m)!;
+      // The entry module's own item is the deposits & withdrawals form.
+      const label = t(m === "entry" ? "Deposits & withdrawals" : mod.label);
+      if (can(user, m)) return [{ href: mod.href, label }];
+      if (entry && ENTRY_ONLY[m]) return [{ href: ENTRY_ONLY[m], label }];
+      return [];
+    }),
   })).filter((g) => g.items.length);
 
   const top = (

@@ -86,7 +86,7 @@ export async function saveBatch(kind: string, brandId: number, rows: Row[], defa
     const errors: Err[] = [];
     const fail = (i: number, msg: string, vars?: Record<string, string | number>) => errors.push({ i, msg: t(msg, vars) });
     const done = (message: string): BatchResult => {
-      revalidatePath("/entry");
+      for (const p of ["/entry", "/lucky-box/add", "/players/add"]) revalidatePath(p);
       revalidatePath("/expenses");
       return { ok: true, message };
     };
@@ -344,7 +344,7 @@ export async function deleteEntry(_p: Result, fd: FormData) {
       await prisma.player.delete({ where: { id } });
       await audit(user, "DELETE", "Player", id, p.brandId, `Deleted player ${p.username}`, p);
     }
-    revalidatePath("/entry");
+    for (const p of ["/entry", "/lucky-box/add", "/players/add"]) revalidatePath(p);
     revalidatePath("/expenses");
     revalidatePath("/transactions");
     return "Deleted.";
@@ -410,7 +410,7 @@ export async function updateEntry(_p: Result, fd: FormData) {
       await prisma.player.update({ where: { id }, data });
       await audit(user, "UPDATE", "Player", id, p.brandId, `Edited player ${p.username}`, { before: p, after: data });
     }
-    revalidatePath("/entry");
+    for (const p of ["/entry", "/lucky-box/add", "/players/add"]) revalidatePath(p);
     revalidatePath("/expenses");
     revalidatePath("/transactions");
     return "Saved.";
