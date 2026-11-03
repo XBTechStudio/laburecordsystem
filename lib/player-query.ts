@@ -27,6 +27,7 @@ export type PlayerRow = {
   name: string | null;
   phone: string | null;
   note: string | null;
+  status: string;
   depositTotal: number;
   depositCount: number;
   withdrawTotal: number;
@@ -44,6 +45,7 @@ export type PlayerFilter = {
   tierRank?: number;
   assigned?: "me" | "none" | number;
   meId?: number;
+  status?: "ACTIVE" | "SUSPENDED" | "BANNED";
   /** Only players whose last deposit is older than / newer than these instants. */
   idleBefore?: Date;
   idleAfter?: Date;
@@ -77,6 +79,7 @@ export async function queryPlayers(s: TierScoring, f: PlayerFilter): Promise<{ r
   if (f.assigned === "me" && f.meId) where.push(Prisma.sql`p.assignedToId = ${f.meId}`);
   else if (f.assigned === "none") where.push(Prisma.sql`p.assignedToId IS NULL`);
   else if (typeof f.assigned === "number") where.push(Prisma.sql`p.assignedToId = ${f.assigned}`);
+  if (f.status) where.push(Prisma.sql`p.status = ${f.status}`);
   if (f.hasDeposit) where.push(Prisma.sql`p.depositCount > 0`);
   if (f.contacted != null) {
     const ex = Prisma.sql`EXISTS (SELECT 1 FROM \`ContactLog\` c WHERE c.playerId = p.id AND c.contactedAt > p.lastDepositAt)`;
@@ -101,7 +104,7 @@ export async function queryPlayers(s: TierScoring, f: PlayerFilter): Promise<{ r
 
   const [rows, total] = await Promise.all([
     prisma.$queryRaw<PlayerRow[]>`
-      SELECT p.id, p.brandId, p.username, p.name, p.phone, p.note, p.depositTotal, p.depositCount, p.withdrawTotal, p.withdrawCount,
+      SELECT p.id, p.brandId, p.username, p.name, p.phone, p.note, p.status, p.depositTotal, p.depositCount, p.withdrawTotal, p.withdrawCount,
              p.firstDepositAt, p.lastDepositAt, p.assignedToId, u.name AS assignedName, ${score} AS score
       FROM \`Player\` p LEFT JOIN \`User\` u ON u.id = p.assignedToId
       WHERE ${cond} ORDER BY ${order} LIMIT ${f.limit} OFFSET ${f.offset}`,
@@ -119,6 +122,8 @@ export async function queryPlayers(s: TierScoring, f: PlayerFilter): Promise<{ r
     total: Number(total[0]?.c ?? 0),
   };
 }
+
+export const statusParam = (v: string | undefined) => (v === "ACTIVE" || v === "SUSPENDED" || v === "BANNED" ? v : undefined);
 
 export function tierName(s: TierScoring, score: number) {
   const sorted = [...s.tiers].sort((a, b) => b.minScore - a.minScore);

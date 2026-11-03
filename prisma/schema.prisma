@@ -7,6 +7,13 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+/// Set by staff on the player page: suspended or banned players are flagged everywhere they show up.
+enum PlayerStatus {
+  ACTIVE
+  SUSPENDED
+  BANNED
+}
+
 enum TxnType {
   DEPOSIT
   WITHDRAW
@@ -168,6 +175,7 @@ model Player {
   phoneKey       String?   @db.VarChar(12)
   name           String?   @db.VarChar(120)
   note           String?   @db.VarChar(255)
+  status         PlayerStatus @default(ACTIVE)
   assignedToId   Int?
   // Lifetime figures, kept up to date whenever transactions change.
   depositTotal   Decimal   @default(0) @db.Decimal(16, 2)

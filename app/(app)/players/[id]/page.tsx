@@ -2,9 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ActionButton, ActionForm, Dialog, Submit } from "@/components/client";
 import { ContactForm } from "@/components/contact-form";
-import { TierChip } from "@/components/tier";
+import { PLAYER_STATUSES, StatusChip, TierChip } from "@/components/tier";
 import { Card, Chip, Empty, Field, Info, TableWrap } from "@/components/ui";
-import { can, canSeeBrand, requirePage } from "@/lib/auth";
+import { can, canSeeBrand, requirePage, seesWithdrawals } from "@/lib/auth";
 import { dayOf, todayStr } from "@/lib/dates";
 import { prisma } from "@/lib/db";
 import { editRights } from "@/lib/edit-rights";
@@ -32,11 +32,14 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
   const wd = n(player.withdrawTotal);
   const tier = scorePlayer(settings.tierScoring, dep, player.depositCount);
   const s = settings.tierScoring;
-  const canEdit = can(user, "players", 3);
+  const canEdit = can(user, "players", 2);
+  const full = can(user, "players", 3);
+  // Deposit-only staff see none of the player's withdrawals.
+  const seeWd = seesWithdrawals(user);
   const canLog = can(user, "cs", 2) || can(user, "churn", 2);
 
   const [txns, claims, contacts, twins, months, promos, staff, firstTxn] = await Promise.all([
-    prisma.txn.findMany({ where: { playerId: id }, include: { channel: true, createdBy: { select: { name: true } } }, orderBy: { txnAt: "desc" }, take: 50 }),
+    prisma.txn.findMany({ where: { playerId: id, ...(seeWd ? {} : { type: "DEPOSIT" as const }) }, include: { channel: true, createdBy: { select: { name: true } } }, orderBy: { txnAt: "desc" }, take: 50 }),
     prisma.promoClaim.findMany({ where: { playerId: id }, include: { promotion: true }, orderBy: { claimedAt: "desc" }, take: 20 }),
     prisma.contactLog.findMany({ where: { playerId: id }, include: { staff: true, promotion: true }, orderBy: { contactedAt: "desc" }, take: 30 }),
     player.phoneKey
@@ -44,9 +47,9 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
       : Promise.resolve([]),
     prisma.$queryRaw<{ m: string; type: string; amt: unknown; cnt: bigint }[]>`
       SELECT DATE_FORMAT(DATE_ADD(txnAt, INTERVAL 8 HOUR), '%Y-%m') AS m, type, SUM(amount) AS amt, COUNT(*) AS cnt
-      FROM \`Txn\` WHERE playerId = ${id} AND txnAt >= DATE_SUB(NOW(), INTERVAL 12 MONTH) GROUP BY m, type ORDER BY m`,
+      FROM \`Txn\` WHERE playerId = ${id} AND (type = 'DEPOSIT' OR ${seeWd}) AND txnAt >= DATE_SUB(NOW(), INTERVAL 12 MONTH) GROUP BY m, type ORDER BY m`,
     prisma.promotion.findMany({ where: { brandId: player.brandId, active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
-    can(user, "churn", 3) || canEdit ? prisma.user.findMany({ where: { active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }) : Promise.resolve([]),
+    can(user, "churn", 3) || full ? prisma.user.findMany({ where: { active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }) : Promise.resolve([]),
     prisma.txn.findFirst({ where: { playerId: id }, orderBy: { txnAt: "asc" }, select: { txnAt: true } }),
   ]);
   // Only for brands connected to their platform: bets over the last 30 days.
@@ -97,6 +100,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
           <h1 className="mt-1 flex flex-wrap items-center gap-2 text-xl font-semibold">
             {player.username}
             <TierChip name={tier.tier} rank={tier.rank} score={tier.score} />
+            <StatusChip status={player.status} />
           </h1>
           <p className="mt-0.5 text-sm text-ink-2">
             {player.brand.name}
@@ -105,7 +109,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
             {player.registeredAt && ` · ${t("Registered {d}", { d: d10(player.registeredAt) })}`}
             {player.referrer && ` · ${t("Referrer: {r}", { r: player.referrer })}`}
             {bets._sum.bet != null && ` · ${t("Bets (last 30 days): {a}", { a: money0(n(bets._sum.bet), cur) })}`}
-            {player.note && <span className="block text-muted">{player.note}</span>}
+            {player.note && <span className="block text-warning-ink">{player.note}</span>}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -140,14 +144,25 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
               <ActionForm action={updatePlayer} close className="space-y-3">
                 <input type="hidden" name="id" value={id} />
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label={t("Phone")} hint={t("Used to find the same person in other brands")}>
-                    <input name="phone" className="input" defaultValue={player.phone ?? ""} />
-                  </Field>
                   <Field label={t("Name")}>
                     <input name="name" className="input" defaultValue={player.name ?? ""} />
                   </Field>
+                  <Field label={t("Status")}>
+                    <select name="status" className="input" defaultValue={player.status}>
+                      {PLAYER_STATUSES.map(([v, label]) => (
+                        <option key={v} value={v}>
+                          {t(label)}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
                 </div>
-                <Field label={t("Note")}>
+                {full && (
+                  <Field label={t("Phone")} hint={t("Used to find the same person in other brands")}>
+                    <input name="phone" className="input" defaultValue={player.phone ?? ""} />
+                  </Field>
+                )}
+                <Field label={t("Remark")} hint={t("Shown under the player's name, e.g. fake slips, bonus hunter")}>
                   <input name="note" className="input" defaultValue={player.note ?? ""} maxLength={250} />
                 </Field>
                 <div className="flex justify-end">
@@ -164,11 +179,15 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <div className={`grid grid-cols-2 gap-3 md:grid-cols-3 ${seeWd ? "xl:grid-cols-6" : "xl:grid-cols-4"}`}>
         {[
           [t("Lifetime deposits"), money0(dep, cur), t("{n} deposits", { n: player.depositCount })],
-          [t("Lifetime withdrawals"), money0(wd, cur), t("{n} withdrawals", { n: player.withdrawCount })],
-          [t("Net (deposit − withdrawal)"), money0(dep - wd, cur), dep - wd < 0 ? t("Player is ahead") : t("Company is ahead")],
+          ...(seeWd
+            ? [
+                [t("Lifetime withdrawals"), money0(wd, cur), t("{n} withdrawals", { n: player.withdrawCount })],
+                [t("Net (deposit − withdrawal)"), money0(dep - wd, cur), dep - wd < 0 ? t("Player is ahead") : t("Company is ahead")],
+              ]
+            : []),
           [t("Average deposit"), player.depositCount ? money0(dep / player.depositCount, cur) : "–", ""],
           [t("First deposit"), d10(player.firstDepositAt), ""],
           [t("Last deposit"), d10(player.lastDepositAt), ago(player.lastDepositAt, t)],
@@ -237,7 +256,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
                     <th>{t("Brand")}</th>
                     <th>{t("Username")}</th>
                     <th className="r">{t("Deposits")}</th>
-                    <th className="r">{t("Withdrawals")}</th>
+                    {seeWd && <th className="r">{t("Withdrawals")}</th>}
                     <th>{t("Last deposit")}</th>
                   </tr>
                 </thead>
@@ -246,7 +265,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
                     <td className="font-medium">{player.brand.name}</td>
                     <td>{player.username}</td>
                     <td className="r">{money0(dep, cur)}</td>
-                    <td className="r">{money0(wd, cur)}</td>
+                    {seeWd && <td className="r">{money0(wd, cur)}</td>}
                     <td>{d10(player.lastDepositAt)}</td>
                   </tr>
                   {visibleTwins.map((t) => (
@@ -258,7 +277,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
                         </Link>
                       </td>
                       <td className="r">{money0(t.depositTotal, t.brand.currency)}</td>
-                      <td className="r">{money0(t.withdrawTotal, t.brand.currency)}</td>
+                      {seeWd && <td className="r">{money0(t.withdrawTotal, t.brand.currency)}</td>}
                       <td>{d10(t.lastDepositAt)}</td>
                     </tr>
                   ))}
@@ -267,7 +286,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
                   <tr>
                     <td colSpan={2}>{t("All brands")} ({settings.baseCurrency})</td>
                     <td className="r">{money0(crossTotal.dep, settings.baseCurrency)}</td>
-                    <td className="r">{money0(crossTotal.wd, settings.baseCurrency)}</td>
+                    {seeWd && <td className="r">{money0(crossTotal.wd, settings.baseCurrency)}</td>}
                     <td />
                   </tr>
                 </tfoot>
@@ -287,12 +306,16 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
                 <span className="text-ink-2">{m}</span>
                 <div className="space-y-0.5">
                   <div className="h-2 rounded-r-[4px] bg-[var(--series-1)]" style={{ width: `${(v.dep / monthMax) * 100}%` }} title={`${t("Deposits")} ${money0(v.dep, cur)}`} />
-                  <div className="h-2 rounded-r-[4px] bg-[var(--series-2)]" style={{ width: `${(v.wd / monthMax) * 100}%` }} title={`${t("Withdrawals")} ${money0(v.wd, cur)}`} />
+                  {seeWd && <div className="h-2 rounded-r-[4px] bg-[var(--series-2)]" style={{ width: `${(v.wd / monthMax) * 100}%` }} title={`${t("Withdrawals")} ${money0(v.wd, cur)}`} />}
                 </div>
                 <span className="text-right">
                   {money0(v.dep, cur)}
-                  <br />
-                  <span className="text-muted">{money0(v.wd, cur)}</span>
+                  {seeWd && (
+                    <>
+                      <br />
+                      <span className="text-muted">{money0(v.wd, cur)}</span>
+                    </>
+                  )}
                 </span>
               </div>
             ))}
@@ -300,9 +323,11 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
               <span className="flex items-center gap-1.5">
                 <span className="h-2 w-3 rounded-sm bg-[var(--series-1)]" /> {t("Deposits")}
               </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-2 w-3 rounded-sm bg-[var(--series-2)]" /> {t("Withdrawals")}
-              </span>
+              {seeWd && (
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2 w-3 rounded-sm bg-[var(--series-2)]" /> {t("Withdrawals")}
+                </span>
+              )}
             </div>
           </div>
         )}

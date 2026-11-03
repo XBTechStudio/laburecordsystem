@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { can, getUser } from "@/lib/auth";
+import { can, getUser, seesWithdrawals } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { dt, n } from "@/lib/format";
 import { getT } from "@/lib/i18n-server";
@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   if (!user || !can(user, "transactions")) return new Response("Not allowed", { status: 403 });
   const sp = Object.fromEntries(req.nextUrl.searchParams);
   const [scope, t] = await Promise.all([getScope(user), getT()]);
-  const { range, where } = txnFilter(sp, scope.brandIds);
+  const { range, where } = txnFilter(sp, scope.brandIds, !seesWithdrawals(user));
   const rows = await prisma.txn.findMany({
     where,
     include: { player: { select: { username: true } }, channel: { select: { name: true } }, createdBy: { select: { name: true } } },

@@ -6,7 +6,7 @@ import { cache } from "react";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { MODULES, levelOf, type Level, type Module, type Perms } from "@/lib/perms";
+import { MODULES, hidesWithdrawals, levelOf, type Level, type Module, type Perms } from "@/lib/perms";
 
 const scrypt = promisify(scryptCb) as (pw: string, salt: Buffer, len: number) => Promise<Buffer>;
 
@@ -141,6 +141,11 @@ export function level(user: CurrentUser, m: Module): Level {
 
 export function can(user: CurrentUser, m: Module, min: Level = 1) {
   return level(user, m) >= min;
+}
+
+/** Deposit-only staff: withdrawals are left out of every list and total they see. */
+export function seesWithdrawals(user: CurrentUser) {
+  return !hidesWithdrawals(user.perms);
 }
 
 /** First page this user may open — where we send people who land somewhere they can't see. */

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { AutoSelect } from "@/components/client";
 import { RangeBar } from "@/components/range";
 import { Card, Chip, Empty, PageHeader, Pager, TableWrap } from "@/components/ui";
-import { can, requirePage } from "@/lib/auth";
+import { can, requirePage, seesWithdrawals } from "@/lib/auth";
 import { txnModule } from "@/lib/perms";
 import { prisma } from "@/lib/db";
 import { editRights } from "@/lib/edit-rights";
@@ -20,7 +20,8 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
   const sp = await searchParams;
   const [scope, t, rights] = await Promise.all([getScope(user), getT(), editRights(user, "entry")]);
   const page = Math.max(1, Number(sp.page) || 1);
-  const { range, where, playerId } = txnFilter(sp, scope.brandIds);
+  const seeWd = seesWithdrawals(user);
+  const { range, where, playerId } = txnFilter(sp, scope.brandIds, !seeWd);
   const canEdit = can(user, "entry", 2);
 
   const [rows, sums, byWho, channels, staff, player] = await Promise.all([
@@ -70,7 +71,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
     <div className="max-w-7xl">
       <PageHeader
         title={t("Transactions")}
-        desc={t("Every deposit and withdrawal, with who entered it and when.")}
+        desc={seeWd ? t("Every deposit and withdrawal, with who entered it and when.") : t("Every deposit, with who entered it and when.")}
         actions={
           <a className="btn" href={`/api/export/transactions?${new URLSearchParams(params)}`}>
             ⬇ {t("Export Excel")}
@@ -100,11 +101,13 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
             </>
           )}
           <input name="q" defaultValue={sp.q} className="input h-8 w-56" placeholder={t("Search player or reference no.")} />
-          <AutoSelect name="type" defaultValue={sp.type ?? ""} className="input h-8 w-auto">
-            <option value="">{t("Deposits & withdrawals")}</option>
-            <option value="DEPOSIT">{t("Deposits only")}</option>
-            <option value="WITHDRAW">{t("Withdrawals only")}</option>
-          </AutoSelect>
+          {seeWd && (
+            <AutoSelect name="type" defaultValue={sp.type ?? ""} className="input h-8 w-auto">
+              <option value="">{t("Deposits & withdrawals")}</option>
+              <option value="DEPOSIT">{t("Deposits only")}</option>
+              <option value="WITHDRAW">{t("Withdrawals only")}</option>
+            </AutoSelect>
+          )}
           <AutoSelect name="channel" defaultValue={sp.channel ?? ""} className="input h-8 w-auto">
             <option value="">{t("All PG / banks")}</option>
             {chOpts.map((c) => (
@@ -136,10 +139,10 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
         </form>
       </div>
 
-      <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className={`mb-4 grid grid-cols-2 gap-3 ${seeWd ? "lg:grid-cols-4" : "lg:grid-cols-2"}`}>
         <Tile label={t("Deposits")} value={money(tot.dep, scope.currency)} sub={t("{n} transactions", { n: count(tot.depN) })} />
-        <Tile label={t("Withdrawals")} value={money(tot.wd, scope.currency)} sub={t("{n} transactions", { n: count(tot.wdN) })} />
-        <Tile label={t("Deposits − withdrawals")} value={money(tot.dep - tot.wd, scope.currency)} sub={scope.current ? scope.current.name : t("All brands")} />
+        {seeWd && <Tile label={t("Withdrawals")} value={money(tot.wd, scope.currency)} sub={t("{n} transactions", { n: count(tot.wdN) })} />}
+        {seeWd && <Tile label={t("Deposits − withdrawals")} value={money(tot.dep - tot.wd, scope.currency)} sub={scope.current ? scope.current.name : t("All brands")} />}
         <div className="card p-3.5">
           <div className="text-xs text-ink-2">{t("Entered by")}</div>
           {who.length === 0 ? (

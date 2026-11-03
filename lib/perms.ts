@@ -16,11 +16,11 @@ export const MODULES = [
   { key: "dashboard", href: "/", label: tk("Dashboard"), levels: [0, 1], hint: tk("Overview numbers and alerts") },
   { key: "entry", href: "/entry", label: tk("Data entry"), levels: [0, 2, 3], hint: tk("Add = enter data · Full = change or delete saved entries") },
   { key: "deposits", href: "/entry", label: tk("Enter deposits"), levels: [0, 2], hint: tk("Deposits part of Data entry and Excel import (needs Data entry too)") },
-  { key: "withdrawals", href: "/entry", label: tk("Enter withdrawals"), levels: [0, 2], hint: tk("Withdrawals part of Data entry and Excel import (needs Data entry too)") },
+  { key: "withdrawals", href: "/entry", label: tk("Enter withdrawals"), levels: [0, 2], hint: tk("Withdrawals part of Data entry and Excel import (needs Data entry too). Staff who enter deposits but not withdrawals don't see withdrawals at all.") },
   { key: "import", href: "/import", label: tk("Excel import"), levels: [0, 2, 3], hint: tk("Full = undo imports and manage templates") },
   { key: "transactions", href: "/transactions", label: tk("Transactions"), levels: [0, 1], hint: tk("Every deposit and withdrawal, with who entered it") },
   { key: "reports", href: "/reports", label: tk("Reports"), levels: [0, 1, 3], hint: tk("Full = save reports for the whole team") },
-  { key: "players", href: "/players", label: tk("Players"), levels: [0, 1, 3], hint: tk("Full = edit player details and assign CS") },
+  { key: "players", href: "/players", label: tk("Players"), levels: [0, 1, 2, 3], hint: tk("Add = edit player name, remark and status · Full = also phone and assigning CS") },
   { key: "alerts", href: "/alerts", label: tk("Follow-up alerts"), levels: [0, 1, 2, 3], hint: tk("Add = act on own alerts · Full = see and handle everyone's") },
   { key: "churn", href: "/churn", label: tk("Churn follow-up"), levels: [0, 1, 2, 3], hint: tk("Add = log contacts · Full = assign players to others") },
   { key: "promotions", href: "/promotions", label: tk("Promotions"), levels: [0, 1, 3], hint: tk("Full = create and edit promotions") },
@@ -40,6 +40,11 @@ export type Module = (typeof MODULES)[number]["key"];
 /** The permission that lets someone enter (and fix) a deposit or a withdrawal. */
 export const txnModule = (type: string) => (type === "WITHDRAW" ? ("withdrawals" as const) : ("deposits" as const));
 export type Perms = Partial<Record<Module, Level>>;
+
+/** Staff who may enter deposits but not withdrawals don't see withdrawals anywhere; those who enter withdrawals still see deposits. */
+export function hidesWithdrawals(perms: Perms) {
+  return levelOf(perms, "deposits") >= 2 && levelOf(perms, "withdrawals") < 2;
+}
 
 export function levelOf(perms: Perms, m: Module): Level {
   // Roles saved before follow-up alerts existed get them at the level they have for following up players.

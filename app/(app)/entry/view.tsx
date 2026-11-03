@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { BatchEntry, type Col } from "@/components/batch-entry";
 import { AutoSelect } from "@/components/client";
 import { Card, Chip, Empty, Field, PageHeader, TableWrap } from "@/components/ui";
-import { can, type CurrentUser } from "@/lib/auth";
+import { can, seesWithdrawals, type CurrentUser } from "@/lib/auth";
 import { txnModule } from "@/lib/perms";
 import { dayStart, addDays, toLocalInput, todayStr } from "@/lib/dates";
 import { prisma } from "@/lib/db";
@@ -212,7 +212,7 @@ async function Recent({
 
   if (kind === "txn") {
     const rows = await prisma.txn.findMany({
-      where: { brandId: { in: brandIds }, createdAt: created, ...mine },
+      where: { brandId: { in: brandIds }, createdAt: created, ...mine, ...(seesWithdrawals(user) ? {} : { type: "DEPOSIT" as const }) },
       include: { player: true, channel: true, createdBy: { select: { name: true } } },
       orderBy: { id: "desc" },
       take: 200,
