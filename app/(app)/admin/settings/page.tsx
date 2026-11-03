@@ -4,6 +4,7 @@ import { Card, Chip, Field, PageHeader, TableWrap, Tabs } from "@/components/ui"
 import { can, requirePage } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { n } from "@/lib/format";
+import { levelOf, type Perms } from "@/lib/perms";
 import { tk, type T } from "@/lib/i18n";
 import { getT } from "@/lib/i18n-server";
 import { getSettings } from "@/lib/settings";
@@ -175,10 +176,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                   <label key={r.id} className="flex items-center gap-2">
                     <input type="checkbox" name="roleId" value={r.id} defaultChecked={s.alerts.roleIds.includes(r.id)} disabled={ro} className="h-4 w-4 accent-[var(--brand)]" />
                     {t(r.name)}
+                    {levelOf((r.perms ?? {}) as Perms, "alerts") < 2 && <span className="text-xs text-warning-ink">{t("(needs Add on Follow-up alerts)")}</span>}
                   </label>
                 ))}
               </div>
-              <span className="hint block">{t("Tick none for every role that can act on follow-up alerts (Staff & roles).")}</span>
+              <span className="hint block">{t("Tick none for every role that can act on follow-up alerts (Staff & roles).")} {t("A ticked role also needs Add or Full on Follow-up alerts under Staff & roles, or it gets nothing.")}</span>
             </fieldset>
             <div className="space-y-2.5">
               <Check name="popup" label={t("Pop up new alerts on screen")} on={s.alerts.popup} disabled={ro} />

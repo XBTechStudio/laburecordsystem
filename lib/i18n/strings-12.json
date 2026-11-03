@@ -85,5 +85,9 @@
 ["Remark", "备注", "Catatan"],
 ["Every deposit, with who entered it and when.", "每一笔充值，以及谁、什么时候录入的。", "Setiap deposit, beserta siapa yang menginput dan kapan."],
 ["Shown under the player's name, e.g. fake slips, bonus hunter", "显示在玩家名字下面，比如：骗单、Bonus Hunter", "Ditampilkan di bawah nama pemain, mis. slip palsu, bonus hunter"],
-["Withdrawals part of Data entry and Excel import (needs Data entry too). Staff who enter deposits but not withdrawals don't see withdrawals at all.", "数据录入和 Excel 导入里的提款部分（也需要数据录入权限）。能录充值、不能录提款的员工完全看不到提款。", "Bagian penarikan di Input data dan impor Excel (perlu Input data juga). Staf yang boleh input deposit tetapi tidak penarikan sama sekali tidak melihat penarikan."]
+["Withdrawals part of Data entry and Excel import (needs Data entry too). Staff who enter deposits but not withdrawals don't see withdrawals at all.", "数据录入和 Excel 导入里的提款部分（也需要数据录入权限）。能录充值、不能录提款的员工完全看不到提款。", "Bagian penarikan di Input data dan impor Excel (perlu Input data juga). Staf yang boleh input deposit tetapi tidak penarikan sama sekali tidak melihat penarikan."],
+["Your role doesn't receive follow-up alerts", "你的角色不接收跟进提醒", "Peran Anda tidak menerima peringatan tindak lanjut"],
+["To get them, your role needs Add or Full on Follow-up alerts (Staff & roles) and has to be ticked under Settings → Alerts → Roles that receive alerts. Ask an admin.", "要收到提醒，你的角色要在「员工与权限」里把「跟进提醒」设为新增或完全，并在 设置 → 提醒 →「接收提醒的角色」里勾上。请找管理员设置。", "Agar menerimanya, peran Anda perlu Tambah atau Penuh di Peringatan tindak lanjut (Staf & peran) dan dicentang di Pengaturan → Peringatan → Peran yang menerima peringatan. Hubungi admin."],
+["(needs Add on Follow-up alerts)", "（「跟进提醒」需新增权限）", "(perlu Tambah di Peringatan tindak lanjut)"],
+["A ticked role also needs Add or Full on Follow-up alerts under Staff & roles, or it gets nothing.", "勾上的角色还要在「员工与权限」里把「跟进提醒」设为新增或完全，否则收不到。", "Peran yang dicentang juga perlu Tambah atau Penuh di Peringatan tindak lanjut (Staf & peran), jika tidak tidak menerima apa pun."]
 ]

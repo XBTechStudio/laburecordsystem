@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { getUser } from "@/lib/auth";
 import { alertText, type AlertKindName } from "@/lib/alert-text";
-import { alertScope, getsAlerts } from "@/lib/alerts";
+import { alertScope, getsAlerts, mutedStaff } from "@/lib/alerts";
 import { prisma } from "@/lib/db";
 import { getT } from "@/lib/i18n-server";
 import { alertTick } from "@/lib/promo-engine";
@@ -15,9 +15,9 @@ export async function GET(req: NextRequest) {
   const settings = await getSettings();
   if (!getsAlerts(user, settings)) return Response.json({ open: 0, items: [] });
   await alertTick();
-  const [scope, t] = await Promise.all([getScope(user), getT()]);
+  const [scope, t, muted] = await Promise.all([getScope(user), getT(), mutedStaff(settings)]);
   const since = Number(req.nextUrl.searchParams.get("since")) || 0;
-  const where = { ...alertScope(user, settings, scope.brandIds, "mine"), doneAt: null };
+  const where = { ...alertScope(user, settings, scope.brandIds, "mine", muted), doneAt: null };
   const [open, fresh] = await Promise.all([
     prisma.alert.count({ where }),
     since

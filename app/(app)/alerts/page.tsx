@@ -5,7 +5,7 @@ import { ActionButton, AutoSelect, Dialog } from "@/components/client";
 import { ContactForm } from "@/components/contact-form";
 import { Card, Chip, Empty, Info, PageHeader, Pager, TableWrap, Tabs } from "@/components/ui";
 import { alertText, KIND_LABEL, KIND_TONE, when, type AlertKindName } from "@/lib/alert-text";
-import { alertScope, getsAlerts } from "@/lib/alerts";
+import { alertScope, getsAlerts, mutedStaff } from "@/lib/alerts";
 import { can, requirePage } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { count, money } from "@/lib/format";
@@ -27,13 +27,40 @@ export default async function AlertsPage({ searchParams }: { searchParams: Promi
   await alertTick();
   const [scope, settings, t] = await Promise.all([getScope(user), getSettings(), getT()]);
   const full = can(user, "alerts", 3);
+  const header = (
+    <PageHeader
+      title={t("Follow-up alerts")}
+      desc={
+        <>
+          {t("Players to contact now: close to a bonus, bonus ready or expiring, recalled, or due a second follow-up.")}{" "}
+          <Info>
+            {t("Alerts are worked out from the deposits staff enter, using each promotion's conditions (Promotions → Conditions) and Settings → Alerts. Logging a contact closes the player's alerts, so nobody is told twice. Alerts close by themselves when the period ends or the bonus expires.")}
+          </Info>
+        </>
+      }
+    />
+  );
+  // Without this, the page would show every count as 0, which reads as "no data" rather than "not for you".
+  if (!getsAlerts(user, settings) && !full) {
+    return (
+      <div className="max-w-7xl">
+        {header}
+        <Card>
+          <Empty title={t("Your role doesn't receive follow-up alerts")}>
+            {t("To get them, your role needs Add or Full on Follow-up alerts (Staff & roles) and has to be ticked under Settings → Alerts → Roles that receive alerts. Ask an admin.")}
+          </Empty>
+        </Card>
+      </div>
+    );
+  }
   const act = can(user, "alerts", 2);
   const tab = sp.tab === "done" ? "done" : "open";
   const who = full && sp.who === "all" ? "all" : "mine";
   const kind = KINDS.find((k) => k === sp.kind);
   const page = Math.max(1, Number(sp.page) || 1);
 
-  const base: Prisma.AlertWhereInput = alertScope(user, settings, scope.brandIds, who);
+  const muted = await mutedStaff(settings);
+  const base: Prisma.AlertWhereInput = alertScope(user, settings, scope.brandIds, who, muted);
   const where: Prisma.AlertWhereInput = {
     ...base,
     ...(kind ? { kind: kind as AlertKind } : {}),
@@ -54,6 +81,8 @@ export default async function AlertsPage({ searchParams }: { searchParams: Promi
   ]);
   const openCount = (k?: string) => byKind.filter((b) => !k || b.kind === k).reduce((a, b) => a + b._count, 0);
   const staffName = new Map(staff.map((s) => [s.id, s.name]));
+  // Addressed to someone who can't receive alerts: shown, and takeable, as the whole brand's.
+  const forStaff = (id: number | null) => (id && !muted.includes(id) ? id : null);
   const params = Object.fromEntries(Object.entries(sp).filter(([k, v]) => v && k !== "page")) as Record<string, string>;
   const href = (q: Record<string, string>) => `/alerts?${new URLSearchParams({ ...params, ...q })}`;
   const focus = Number(sp.focus) || 0;
@@ -61,20 +90,7 @@ export default async function AlertsPage({ searchParams }: { searchParams: Promi
 
   return (
     <div className="max-w-7xl">
-      <PageHeader
-        title={t("Follow-up alerts")}
-        desc={
-          <>
-            {t("Players to contact now: close to a bonus, bonus ready or expiring, recalled, or due a second follow-up.")}{" "}
-            <Info>
-              {t("Alerts are worked out from the deposits staff enter, using each promotion's conditions (Promotions → Conditions) and Settings → Alerts. Logging a contact closes the player's alerts, so nobody is told twice. Alerts close by themselves when the period ends or the bonus expires.")}
-            </Info>
-          </>
-        }
-      />
-      {!getsAlerts(user, settings) && !full && (
-        <div className="mb-4 rounded-lg bg-surface-2 px-3 py-2 text-sm text-ink-2">{t("Your role doesn't receive alerts (Settings → Alerts).")}</div>
-      )}
+      {header}
 
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-6">
         {KINDS.map((k) => (
@@ -137,7 +153,8 @@ export default async function AlertsPage({ searchParams }: { searchParams: Promi
                 {rows.map((a) => {
                   const k = a.kind as AlertKindName;
                   const text = alertText(k, a.data, t, scope.brandCurrency(a.brandId));
-                  const forWho = a.staffId ? (a.staffId === user.id ? t("You") : (staffName.get(a.staffId) ?? a.player.assignedTo?.name ?? t("Another CS"))) : t("Everyone on the brand");
+                  const staffId = forStaff(a.staffId);
+                  const forWho = staffId ? (staffId === user.id ? t("You") : (staffName.get(staffId) ?? a.player.assignedTo?.name ?? t("Another CS"))) : t("Everyone on the brand");
                   const bonusAlert = (k === "ELIGIBLE" || k === "EXPIRING") && a.awardId;
                   return (
                     <tr key={a.id} className={focus === a.id ? "bg-brand-soft" : ""}>
@@ -194,7 +211,7 @@ export default async function AlertsPage({ searchParams }: { searchParams: Promi
                               {t("Released")}
                             </ActionButton>
                           )}
-                          {!a.staffId && (
+                          {!staffId && (
                             <ActionButton action={assignAlert} fields={{ id: a.id, staffId: user.id }}>
                               {t("Take")}
                             </ActionButton>

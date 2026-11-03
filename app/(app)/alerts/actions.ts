@@ -5,15 +5,17 @@ import { assertBrand, can, Denied, guard } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { int, need, run, type Result } from "@/lib/action";
 import { prisma } from "@/lib/db";
+import { mutedStaff } from "@/lib/alerts";
 import { boxPromos, boxStates, releaseBox } from "@/lib/lucky-box";
 import { linkClaims, safely } from "@/lib/promo-engine";
+import { getSettings } from "@/lib/settings";
 
 async function mine(id: number) {
   const user = await guard("alerts", 2);
   const a = await prisma.alert.findUniqueOrThrow({ where: { id }, include: { player: true, promotion: true } });
   assertBrand(user, a.brandId);
-  // Without Full access, only alerts addressed to you or to the whole brand.
-  if (a.staffId && a.staffId !== user.id && !can(user, "alerts", 3)) throw new Denied("This alert belongs to another CS.");
+  // Without Full access, only alerts addressed to you or to the whole brand (which includes staff who can't receive them).
+  if (a.staffId && a.staffId !== user.id && !can(user, "alerts", 3) && !(await mutedStaff(await getSettings())).includes(a.staffId)) throw new Denied("This alert belongs to another CS.");
   return { user, a };
 }
 

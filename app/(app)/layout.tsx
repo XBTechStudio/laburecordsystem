@@ -37,6 +37,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       const mod = MODULES.find((x) => x.key === m)!;
       // The entry module's own item is the deposits & withdrawals form.
       const label = t(m === "entry" ? "Deposits & withdrawals" : mod.label);
+      // Alerts are only for roles that receive them (or Full access); others would see an empty page.
+      if (m === "alerts" && !getsAlerts(user, settings) && !can(user, "alerts", 3)) return [];
       if (can(user, m)) return [{ href: mod.href, label }];
       if (entry && ENTRY_ONLY[m]) return [{ href: ENTRY_ONLY[m], label }];
       return [];
