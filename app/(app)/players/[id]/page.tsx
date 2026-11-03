@@ -363,7 +363,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
                 </thead>
                 <tbody>
                   {txns.map((tx) => (
-                    <tr key={tx.id}>
+                    <tr key={tx.id} className={tx.type === "DEPOSIT" ? "row-dep" : "row-wd"}>
                       <td className="whitespace-nowrap text-ink-2">{dt(tx.txnAt)}</td>
                       <td>{tx.type === "DEPOSIT" ? <Chip tone="good">{t("Deposit")}</Chip> : <Chip tone="warning">{t("Withdrawal")}</Chip>}</td>
                       <td className="r">{money(tx.amount, cur)}</td>

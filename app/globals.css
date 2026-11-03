@@ -173,7 +173,7 @@ body {
   .tbl tbody tr:hover td {
     @apply bg-surface-2/50;
   }
-  /* Whole-row tint on the Transactions list: deposits blue, withdrawals red. */
+  /* Whole-row tint on transaction lists (Transactions, a player's page): deposits blue, withdrawals red. */
   .tbl tr.row-dep td {
     background: var(--dep-soft);
   }
