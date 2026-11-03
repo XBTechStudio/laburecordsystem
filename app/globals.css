@@ -45,6 +45,11 @@
   --c-fee: #0e7f86;
   --dep-soft: #eaf1fb;
   --wd-soft: #fbecec;
+  /* Deposit and withdrawal entry forms: grey and red cards with a matching frame. */
+  --dep-card: #e4e3de;
+  --dep-card-line: #a9a69e;
+  --wd-card: #f8d9d9;
+  --wd-card-line: #d27373;
 }
 
 /* Light by default; dark only when the user picks it. */
@@ -71,6 +76,10 @@
   --c-fee: #45c6cc;
   --dep-soft: #16253a;
   --wd-soft: #351c1c;
+  --dep-card: #2e2e2b;
+  --dep-card-line: #6a6862;
+  --wd-card: #4a2222;
+  --wd-card-line: #a04848;
   --series-1: #3987e5;
   --series-2: #d95926;
   --series-3: #199e70;
@@ -127,6 +136,14 @@ body {
 @layer components {
   .card {
     @apply min-w-0 rounded-xl border border-line bg-surface;
+  }
+  .card.card-dep {
+    background: var(--dep-card);
+    border: 2px solid var(--dep-card-line);
+  }
+  .card.card-wd {
+    background: var(--wd-card);
+    border: 2px solid var(--wd-card-line);
   }
   .btn {
     @apply inline-flex h-9 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-line bg-surface px-3 text-sm font-medium whitespace-nowrap text-ink transition-colors hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50;

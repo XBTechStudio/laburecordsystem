@@ -77,8 +77,8 @@ export function BatchEntry({
   fixed?: Row;
   /** Enter saves the form instead of moving to the next row. */
   enterSaves?: boolean;
-  /** Whole-card background so the deposits and withdrawals forms can't be mixed up: a CSS colour, e.g. var(--wd-soft). */
-  tint?: string;
+  /** Coloured, framed card so the deposits and withdrawals forms can't be mixed up. */
+  tint?: "dep" | "wd";
 }) {
   const router = useRouter();
   const t = useT();
@@ -262,7 +262,7 @@ export function BatchEntry({
   const currency = curs.length === 1 ? curs[0] : null;
 
   return (
-    <div className="card" style={tint ? { background: tint } : undefined}>
+    <div className={tint ? `card card-${tint}` : "card"}>
       <div className="flex flex-wrap items-end gap-3 border-b border-line p-4">
         {title && <h2 className="w-full text-base font-semibold">{title}</h2>}
         {hasTime && (

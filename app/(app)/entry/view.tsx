@@ -117,7 +117,7 @@ export async function EntryView({ user, kind, sp }: { user: CurrentUser; kind: K
             kind="txn"
             title={title}
             fixed={{ type }}
-            tint={type === "DEPOSIT" ? "var(--surface-2)" : "var(--wd-soft)"}
+            tint={type === "DEPOSIT" ? "dep" : "wd"}
             cols={txnCols(type)}
             carryBrand={settings.entry.carryBrand}
             enterSaves={settings.entry.enterSaves}
