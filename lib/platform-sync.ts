@@ -190,23 +190,47 @@ async function saveTxns(link: PlatformLink & { brand: { name: string; currency: 
   }
 
   if (bonus.length) {
-    // Matched by the platform's name first: staff may rename a promotion here.
-    const list = await prisma.promotion.findMany({ where: { brandId }, select: { id: true, name: true, platformName: true } });
-    const promos = new Map([
+    // Like deposits, a platform transaction counts once per brand, whichever promotion it is under.
+    const have = new Map(
+      (await prisma.promoClaim.findMany({ where: { ref: { in: bonus.map((r) => r.id) }, promotion: { brandId } }, select: { ref: true, promotionId: true } })).map((c) => [c.ref!, c.promotionId]),
+    );
+    // Promotions are found by the platform's promotion id, which stays the same when either side renames one;
+    // by name only until a promotion has been seen with its id, and for bonuses without one (e.g. a hand-given angpao).
+    const list = await prisma.promotion.findMany({ where: { brandId }, select: { id: true, name: true, platformId: true, platformName: true } });
+    const byPid = new Map(list.filter((p) => p.platformId).map((p) => [p.platformId!, p.id]));
+    const hasPid = new Set(byPid.values());
+    const byName = new Map([
       ...list.filter((p) => !p.platformName).map((p) => [p.name.toLowerCase(), p.id] as const),
       ...list.filter((p) => p.platformName).map((p) => [p.platformName!.toLowerCase(), p.id] as const),
     ]);
+    /** Remembers that a promotion is the platform's `pid`, unless it already has an id or another promotion has this one. */
+    const learn = async (promotionId: number, pid: string) => {
+      if (hasPid.has(promotionId) || byPid.has(pid)) return;
+      await prisma.promotion.update({ where: { id: promotionId }, data: { platformId: pid } });
+      hasPid.add(promotionId);
+      byPid.set(pid, promotionId);
+    };
     const data: Prisma.PromoClaimCreateManyInput[] = [];
     for (const r of bonus) {
+      const pid = r.promotion?.id ? String(r.promotion.id).slice(0, 40) : null;
+      const filed = have.get(r.id);
+      if (filed !== undefined) {
+        // Already saved, so its promotion is the platform's pid: fills in the ids of promotions saved before they were kept.
+        if (pid) await learn(filed, pid);
+        continue;
+      }
       const playerId = r.user && players.ids.get(String(r.user.id));
       if (!playerId) continue;
       const d = json<Record<string, unknown>>(r.details) ?? {};
       const name = (plainText(r.promotion?.name || String(d.angpao ?? "")) || "Bonus").slice(0, 120);
-      let promotionId = promos.get(name.toLowerCase());
+      let promotionId = (pid && byPid.get(pid)) || byName.get(name.toLowerCase());
       if (!promotionId) {
         promotionId = (await prisma.promotion.upsert({ where: { brandId_name: { brandId, name } }, create: { brandId, name, platformName: name }, update: {} })).id;
-        promos.set(name.toLowerCase(), promotionId);
+        byName.set(name.toLowerCase(), promotionId);
       }
+      if (pid) await learn(promotionId, pid);
+      // The same row can come twice in one read (pages shifting while new bonuses arrive).
+      have.set(r.id, promotionId);
       data.push({ promotionId, playerId, amount: Math.abs(Math.round(Number(r.cash) * 100) / 100), claimedAt: new Date(r.createdDateTime), ref: r.id });
     }
     if (data.length) {

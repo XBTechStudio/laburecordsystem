@@ -371,7 +371,9 @@ model Promotion {
   id        Int       @id @default(autoincrement())
   brandId   Int
   name      String    @db.VarChar(120)
-  /// The promotion's name on the gaming platform, which bonuses are matched by, so renaming it here doesn't split it in two.
+  /// The promotion's id on the gaming platform. Bonuses are matched by it, so a rename on either side doesn't split the promotion in two.
+  platformId   String? @db.VarChar(40)
+  /// The promotion's name on the gaming platform: bonuses are matched by it until the id is known, and when they come without one.
   platformName String? @db.VarChar(120)
   note      String?   @db.VarChar(255)
   active    Boolean   @default(true)
@@ -395,6 +397,7 @@ model Promotion {
   alerts   Alert[]
 
   @@unique([brandId, name])
+  @@unique([brandId, platformId])
 }
 
 model PromoClaim {
@@ -416,6 +419,8 @@ model PromoClaim {
   createdBy User?     @relation("ClaimEnteredBy", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@unique([promotionId, ref])
+  // Platform sync checks a transaction id against the whole brand before saving it.
+  @@index([ref])
   @@index([promotionId, claimedAt])
   @@index([playerId, claimedAt])
   @@index([importId])
