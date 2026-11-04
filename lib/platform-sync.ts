@@ -190,7 +190,12 @@ async function saveTxns(link: PlatformLink & { brand: { name: string; currency: 
   }
 
   if (bonus.length) {
-    const promos = new Map((await prisma.promotion.findMany({ where: { brandId }, select: { id: true, name: true } })).map((p) => [p.name.toLowerCase(), p.id]));
+    // Matched by the platform's name first: staff may rename a promotion here.
+    const list = await prisma.promotion.findMany({ where: { brandId }, select: { id: true, name: true, platformName: true } });
+    const promos = new Map([
+      ...list.filter((p) => !p.platformName).map((p) => [p.name.toLowerCase(), p.id] as const),
+      ...list.filter((p) => p.platformName).map((p) => [p.platformName!.toLowerCase(), p.id] as const),
+    ]);
     const data: Prisma.PromoClaimCreateManyInput[] = [];
     for (const r of bonus) {
       const playerId = r.user && players.ids.get(String(r.user.id));
@@ -199,7 +204,7 @@ async function saveTxns(link: PlatformLink & { brand: { name: string; currency: 
       const name = (plainText(r.promotion?.name || String(d.angpao ?? "")) || "Bonus").slice(0, 120);
       let promotionId = promos.get(name.toLowerCase());
       if (!promotionId) {
-        promotionId = (await prisma.promotion.upsert({ where: { brandId_name: { brandId, name } }, create: { brandId, name }, update: {} })).id;
+        promotionId = (await prisma.promotion.upsert({ where: { brandId_name: { brandId, name } }, create: { brandId, name, platformName: name }, update: {} })).id;
         promos.set(name.toLowerCase(), promotionId);
       }
       data.push({ promotionId, playerId, amount: Math.abs(Math.round(Number(r.cash) * 100) / 100), claimedAt: new Date(r.createdDateTime), ref: r.id });
