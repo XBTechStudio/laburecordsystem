@@ -14,8 +14,8 @@ import { BoxRuleForm } from "./box-form";
 import { boxText, readBox } from "@/lib/box-rule";
 import { getScope } from "@/lib/scope";
 import { getSettings } from "@/lib/settings";
-import { saveConditions, savePromotion, togglePromotion } from "./actions";
-import { tk } from "@/lib/i18n";
+import { saveConditions, savePromotion, setCategory, togglePromotion } from "./actions";
+import { tk, type T } from "@/lib/i18n";
 import { getT } from "@/lib/i18n-server";
 
 const VERDICT: Record<string, [string, "good" | "warning" | "critical" | "neutral"]> = {
@@ -25,6 +25,21 @@ const VERDICT: Record<string, [string, "good" | "warning" | "critical" | "neutra
   keep: [tk("Keep"), "good"],
 };
 
+function CategoryField({ categories, value, t }: { categories: string[]; value?: string | null; t: T }) {
+  return (
+    <Field label={t("Category")} hint={t("Also sets promotions of the same name in your other brands")}>
+      <select name="category" className="input" defaultValue={value ?? ""}>
+        <option value="">{t("No category")}</option>
+        {categories.map((c) => (
+          <option key={c} value={c}>
+            {c}
+          </option>
+        ))}
+      </select>
+    </Field>
+  );
+}
+
 export default async function PromotionsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const user = await requirePage("promotions");
   const sp = await searchParams;
@@ -32,11 +47,15 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
   const range = parseRange(sp, "month");
   const manage = can(user, "promotions", 3);
   const showEnded = sp.ended === "1";
+  const cat = sp.cat ?? "";
   const ids = scope.brandIds;
 
-  const promos = ids.length
+  const all = ids.length
     ? await prisma.promotion.findMany({ where: { brandId: { in: ids }, ...(showEnded ? {} : { active: true }) }, orderBy: [{ active: "desc" }, { name: "asc" }] })
     : [];
+  // Categories still on promotions after being renamed or removed in Settings stay pickable.
+  const categories = [...new Set([...settings.promoCategories, ...all.map((p) => p.category).filter((c): c is string => !!c)])];
+  const promos = cat ? all.filter((p) => (cat === "-" ? !p.category : p.category === cat)) : all;
   const stats = await promoStats(ids, range, settings.promoWindowDays);
   const tracked = promos.map((p) => ({ p, rule: readRule(p.rule) })).filter((x) => x.rule && x.rule.tiers.length);
   const track = await trackStats(tracked.map((x) => x.p.id), range);
@@ -92,6 +111,7 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
                 <Field label={t("Note")}>
                   <input name="note" className="input" placeholder={t("Terms, dates…")} />
                 </Field>
+                <CategoryField categories={categories} t={t} />
                 <div className="flex justify-end">
                   <Submit>{t("Add")}</Submit>
                 </div>
@@ -102,15 +122,24 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
       />
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <RangeBar path="/promotions" range={range} params={sp} />
-        <form action="/promotions">
+        <form action="/promotions" className="flex flex-wrap gap-2">
           {Object.entries(sp)
-            .filter(([k, v]) => v && k !== "ended")
+            .filter(([k, v]) => v && k !== "ended" && k !== "cat")
             .map(([k, v]) => (
               <input key={k} type="hidden" name={k} value={v} />
             ))}
           <AutoSelect name="ended" defaultValue={showEnded ? "1" : ""} className="input h-8 w-auto">
             <option value="">{t("Running promotions")}</option>
             <option value="1">{t("Include ended ones")}</option>
+          </AutoSelect>
+          <AutoSelect name="cat" defaultValue={cat} className="input h-8 w-auto">
+            <option value="">{t("All categories")}</option>
+            {categories.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+            <option value="-">{t("No category")}</option>
           </AutoSelect>
         </form>
       </div>
@@ -203,6 +232,7 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
                 <tr>
                   <th>{t("Promotion")}</th>
                   {multi && <th>{t("Brand")}</th>}
+                  <th>{t("Category")}</th>
                   <th className="r">{t("Claimers")}</th>
                   <th className="r">{t("Claims")}</th>
                   <th className="r">{t("Bonus given")}</th>
@@ -235,6 +265,28 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
                         {!p.active && <div className="text-xs text-muted">{t("Ended")}</div>}
                       </td>
                       {multi && <td className="text-ink-2">{scope.brandName(p.brandId)}</td>}
+                      <td>
+                        {manage ? (
+                          <ActionForm action={setCategory}>
+                            <input type="hidden" name="id" value={p.id} />
+                            <AutoSelect
+                              name="category"
+                              defaultValue={p.category ?? ""}
+                              className="input h-7 w-auto py-0 text-xs"
+                              title={t("Also sets promotions of the same name in your other brands")}
+                            >
+                              <option value="">–</option>
+                              {categories.map((c) => (
+                                <option key={c} value={c}>
+                                  {c}
+                                </option>
+                              ))}
+                            </AutoSelect>
+                          </ActionForm>
+                        ) : (
+                          (p.category && <Chip>{p.category}</Chip>) || <span className="text-muted">–</span>
+                        )}
+                      </td>
                       <td className="r">{count(s.claimers)}</td>
                       <td className="r">{count(s.claims)}</td>
                       <td className="r">{money0(s.given, cur)}</td>
@@ -260,6 +312,7 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
                               <Field label={t("Note")}>
                                 <input name="note" className="input" defaultValue={p.note ?? ""} />
                               </Field>
+                              <CategoryField categories={categories} value={p.category} t={t} />
                               <div className="flex justify-end">
                                 <Submit>{t("Save")}</Submit>
                               </div>

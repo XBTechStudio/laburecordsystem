@@ -55,6 +55,8 @@ export type Settings = {
   promoWindowDays: number;
   /** Promotions costing more than this % of claimers' deposits are marked "Adjust". */
   promoAdjustPercent: number;
+  /** Kinds a promotion can be filed under, to filter the Promotions page. */
+  promoCategories: string[];
   /** Reconciliation differences at or below this amount count as matched. */
   reconTolerance: number;
   /** Minutes in which staff may still fix their own entries. 0 = only roles with Full access can change or delete data. */
@@ -91,6 +93,8 @@ export const DEFAULT_SETTINGS: Settings = {
   alerts: { dayStartHour: 0, weekStartDay: 1, notify: "nearest", target: "owner", roleIds: [], popup: true, sound: true, pollSeconds: 20, recall: true },
   promoWindowDays: 7,
   promoAdjustPercent: 10,
+  // Shown as typed (not translated), so renaming one here renames it everywhere.
+  promoCategories: ["免费赠送", "充值福利", "充值优惠", "任务"],
   reconTolerance: 1,
   selfFixMinutes: 0,
   statementMinutes: 30,

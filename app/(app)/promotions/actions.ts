@@ -20,24 +20,40 @@ export async function savePromotion(_p: Result, fd: FormData) {
     const id = Number(str(fd, "id")) || null;
     const name = str(fd, "name");
     const note = str(fd, "note").slice(0, 250) || null;
+    const category = str(fd, "category").slice(0, 60) || null;
     need(name, "Please enter the promotion name.");
     if (id) {
       const p = await prisma.promotion.findUniqueOrThrow({ where: { id } });
       assertBrand(user, p.brandId);
-      await prisma.promotion.update({ where: { id }, data: { name, note } });
-      await audit(user, "UPDATE", "Promotion", id, p.brandId, `Renamed promotion ${p.name} → ${name}`);
+      await prisma.promotion.update({ where: { id }, data: { name, note, category } });
+      // Like the Category column: promotions of the same name in the user's other brands follow.
+      if (category !== p.category) await prisma.promotion.updateMany({ where: { name, ...(user.brandIds ? { brandId: { in: user.brandIds } } : {}) }, data: { category } });
+      await audit(user, "UPDATE", "Promotion", id, p.brandId, `Renamed promotion ${p.name} → ${name}${category !== p.category ? ` · category ${category ?? "none"}` : ""}`);
     } else {
       // One promotion per brand ticked; each brand keeps its own figures.
       const brandIds = [...new Set(fd.getAll("brandId").map(Number).filter(Number.isInteger))];
       need(brandIds.length, "Choose at least one brand.");
       for (const brandId of brandIds) assertBrand(user, brandId);
       for (const brandId of brandIds) {
-        const p = await prisma.promotion.create({ data: { brandId, name, note } });
+        const p = await prisma.promotion.create({ data: { brandId, name, note, category } });
         await audit(user, "CREATE", "Promotion", p.id, brandId, `Added promotion ${name}`);
       }
     }
     revalidatePath("/promotions");
     return "Promotion saved.";
+  });
+}
+
+/** Files a promotion under a category, together with the promotions of the same name in the other brands this user can see. */
+export async function setCategory(_p: Result, fd: FormData) {
+  return run(async () => {
+    const user = await guard("promotions", 3);
+    const p = await prisma.promotion.findUniqueOrThrow({ where: { id: int(fd, "id") } });
+    assertBrand(user, p.brandId);
+    const category = str(fd, "category").slice(0, 60) || null;
+    await prisma.promotion.updateMany({ where: { name: p.name, ...(user.brandIds ? { brandId: { in: user.brandIds } } : {}) }, data: { category } });
+    await audit(user, "UPDATE", "Promotion", p.id, p.brandId, `Category of ${p.name} → ${category ?? "none"}`);
+    revalidatePath("/promotions");
   });
 }
 

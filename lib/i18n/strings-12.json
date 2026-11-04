@@ -106,5 +106,9 @@
 ["Payouts appear here once the platform sync brings in the bonus records.","平台同步把 bonus 记录拉进来后，这里就会显示。","Bayaran muncul di sini sebaik sahaja penyegerakan platform membawa masuk rekod bonus."],
 ["Top {n} by amount","按金额前 {n} 名","{n} teratas mengikut jumlah"],
 ["Average","平均","Purata"],
-["Last paid","最近发放","Terakhir dibayar"]
+["Last paid","最近发放","Terakhir dibayar"],
+["Promotion categories","优惠种类","Kategori promosi"],
+["One per line. Each promotion can be put in one, and the Promotions page can show one category at a time.","一行一个。每个优惠可以归到其中一个种类，优惠页面可以按种类筛选。","Satu setiap baris. Setiap promosi boleh dimasukkan ke dalam satu kategori, dan halaman Promosi boleh menapis mengikut kategori."],
+["No category","未分类","Tiada kategori"],
+["Also sets promotions of the same name in your other brands","其他品牌里同名的优惠也会一起设定","Juga menetapkan promosi dengan nama yang sama dalam jenama lain anda"]
 ]

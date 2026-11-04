@@ -373,6 +373,8 @@ model Promotion {
   name      String    @db.VarChar(120)
   note      String?   @db.VarChar(255)
   active    Boolean   @default(true)
+  /// One of Settings → promoCategories (e.g. "免费赠送"); null = no category.
+  category  String?   @db.VarChar(60)
   /// Claim conditions the system tracks (see lib/promo-rule.ts). null = the promotion is only analysed from its claims.
   rule      Json?
   /// Tracking runs between these days (inclusive); null = no limit.

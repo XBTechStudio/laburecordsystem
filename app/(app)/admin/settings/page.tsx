@@ -210,6 +210,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             >
               <input name="promoAdjustPercent" className="input w-32" inputMode="decimal" defaultValue={s.promoAdjustPercent} disabled={ro} />
             </Field>
+            <Field label={t("Promotion categories")} hint={t("One per line. Each promotion can be put in one, and the Promotions page can show one category at a time.")}>
+              <textarea name="promoCategories" rows={5} className="input" defaultValue={s.promoCategories.join("\n")} disabled={ro} />
+            </Field>
             <Field label={t("Reconciliation tolerance")} hint={t("Balance differences up to this amount count as matched (rounding, small charges).")}>
               <input name="reconTolerance" className="input w-32" inputMode="decimal" defaultValue={s.reconTolerance} disabled={ro} />
             </Field>
