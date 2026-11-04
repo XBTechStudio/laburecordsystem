@@ -89,5 +89,22 @@
 ["Your role doesn't receive follow-up alerts", "你的角色不接收跟进提醒", "Peran Anda tidak menerima peringatan tindak lanjut"],
 ["To get them, your role needs Add or Full on Follow-up alerts (Staff & roles) and has to be ticked under Settings → Alerts → Roles that receive alerts. Ask an admin.", "要收到提醒，你的角色要在「员工与权限」里把「跟进提醒」设为新增或完全，并在 设置 → 提醒 →「接收提醒的角色」里勾上。请找管理员设置。", "Agar menerimanya, peran Anda perlu Tambah atau Penuh di Peringatan tindak lanjut (Staf & peran) dan dicentang di Pengaturan → Peringatan → Peran yang menerima peringatan. Hubungi admin."],
 ["(needs Add on Follow-up alerts)", "（「跟进提醒」需新增权限）", "(perlu Tambah di Peringatan tindak lanjut)"],
-["A ticked role also needs Add or Full on Follow-up alerts under Staff & roles, or it gets nothing.", "勾上的角色还要在「员工与权限」里把「跟进提醒」设为新增或完全，否则收不到。", "Peran yang dicentang juga perlu Tambah atau Penuh di Peringatan tindak lanjut (Staf & peran), jika tidak tidak menerima apa pun."]
+["A ticked role also needs Add or Full on Follow-up alerts under Staff & roles, or it gets nothing.", "勾上的角色还要在「员工与权限」里把「跟进提醒」设为新增或完全，否则收不到。", "Peran yang dicentang juga perlu Tambah atau Penuh di Peringatan tindak lanjut (Staf & peran), jika tidak tidak menerima apa pun."],
+["Commission","佣金","Komisen"],
+["Rebate","返水","Rebate"],
+["Weekly commission paid to players","发给玩家的每周佣金","Komisen mingguan yang dibayar kepada pemain"],
+["Rebate paid to players","发给玩家的返水","Rebate yang dibayar kepada pemain"],
+["Weekly commission paid to players.","发给玩家的每周佣金。","Komisen mingguan yang dibayar kepada pemain."],
+["Rebate paid to players.","发给玩家的返水。","Rebate yang dibayar kepada pemain."],
+["Read from the platform's bonus records: every promotion with “{word}” in its name counts ({names}). Days and weeks are Malaysia time; a week starts on Monday.","来自平台的 bonus 记录：名称里有「{word}」的优惠都算在内（{names}）。日期和周按马来西亚时间，每周从星期一开始。","Dibaca daripada rekod bonus platform: setiap promosi yang namanya mengandungi “{word}” dikira ({names}). Hari dan minggu ikut waktu Malaysia; minggu bermula hari Isnin."],
+["Total paid","总发放","Jumlah dibayar"],
+["Players paid","拿到的玩家","Pemain dibayar"],
+["Times paid","发放次数","Kali dibayar"],
+["Average per player","每位玩家平均","Purata setiap pemain"],
+["No commission in these dates","这段日期没有佣金","Tiada komisen pada tarikh ini"],
+["No rebate in these dates","这段日期没有返水","Tiada rebate pada tarikh ini"],
+["Payouts appear here once the platform sync brings in the bonus records.","平台同步把 bonus 记录拉进来后，这里就会显示。","Bayaran muncul di sini sebaik sahaja penyegerakan platform membawa masuk rekod bonus."],
+["Top {n} by amount","按金额前 {n} 名","{n} teratas mengikut jumlah"],
+["Average","平均","Purata"],
+["Last paid","最近发放","Terakhir dibayar"]
 ]

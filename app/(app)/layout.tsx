@@ -16,7 +16,7 @@ import { logout } from "./shell-actions";
 const GROUPS: { group: string; modules: Module[] }[] = [
   { group: tk("Overview"), modules: ["dashboard"] },
   { group: tk("Data"), modules: ["players", "entry", "luckybox", "transactions"] },
-  { group: tk("Analysis"), modules: ["reports", "alerts", "churn", "promotions", "cs"] },
+  { group: tk("Analysis"), modules: ["reports", "alerts", "churn", "promotions", "commission", "rebate", "cs"] },
   { group: tk("Finance"), modules: ["reconcile", "expenses", "dividends"] },
   { group: tk("Admin"), modules: ["brands", "users", "audit", "settings"] },
   // At the very bottom, under no heading.

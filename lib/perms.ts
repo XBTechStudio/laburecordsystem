@@ -24,6 +24,8 @@ export const MODULES = [
   { key: "alerts", href: "/alerts", label: tk("Follow-up alerts"), levels: [0, 1, 2, 3], hint: tk("Add = act on own alerts · Full = see and handle everyone's") },
   { key: "churn", href: "/churn", label: tk("Churn follow-up"), levels: [0, 1, 2, 3], hint: tk("Add = log contacts · Full = assign players to others") },
   { key: "promotions", href: "/promotions", label: tk("Promotions"), levels: [0, 1, 3], hint: tk("Full = create and edit promotions") },
+  { key: "commission", href: "/commission", label: tk("Commission"), levels: [0, 1], hint: tk("Weekly commission paid to players") },
+  { key: "rebate", href: "/rebate", label: tk("Rebate"), levels: [0, 1], hint: tk("Rebate paid to players") },
   { key: "luckybox", href: "/lucky-box", label: tk("Lucky Box"), levels: [0, 1, 2, 3], hint: tk("Add = record releases · Full = delete entries") },
   { key: "cs", href: "/cs", label: tk("CS recall tracking"), levels: [0, 1, 2, 3], hint: tk("Add = log own contacts · Full = edit/delete any log") },
   { key: "reconcile", href: "/reconcile", label: tk("PG / bank reconciliation"), levels: [0, 1, 2, 3], hint: tk("Add = enter real balances and transfers · Full = corrections, starting balances, deletions") },
@@ -51,6 +53,8 @@ export function levelOf(perms: Perms, m: Module): Level {
   if (m === "alerts" && perms.alerts === undefined) return Math.max(perms.churn ?? 0, perms.cs ?? 0) as Level;
   // …and Lucky Box at the level they have for alerts (CS release the boxes they are told about).
   if (m === "luckybox" && perms.luckybox === undefined) return levelOf(perms, "alerts");
+  // …and Commission and Rebate if they may view promotions (both are promotions on the platform).
+  if ((m === "commission" || m === "rebate") && perms[m] === undefined) return (levelOf(perms, "promotions") >= 1 ? 1 : 0) as Level;
   // Roles saved before deposits and withdrawals could be split may enter both, if they may enter data.
   if ((m === "deposits" || m === "withdrawals") && perms[m] === undefined) return (levelOf(perms, "entry") >= 2 ? 2 : 0) as Level;
   return (perms[m] ?? 0) as Level;
