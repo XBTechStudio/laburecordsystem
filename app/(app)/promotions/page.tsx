@@ -248,10 +248,11 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
                   <th className="r">{t("Claims")}</th>
                   <th className="r">{t("Bonus given")}</th>
                   <th className="r">{t("Claimers' deposits")}</th>
+                  <th className="r">{t("Claimers' withdrawals")}</th>
                   <th className="r" title={t("Withdrawals made while playing under this promotion: after its bonus, before the player's next deposit, bonus or rebate. As in the platform's Promotion Report.")}>
-                    {t("Promo withdrawals")}
+                    {t("Actual promo withdrawals")}
                   </th>
-                  <th className="r" title={t("Promo withdrawals ÷ bonus given")}>{t("Cost ratio")}</th>
+                  <th className="r" title={t("Actual promo withdrawals ÷ bonus given")}>{t("Cost ratio")}</th>
                   <th className="r">{t("W/L after promo")}</th>
                   <th>{t("Suggestion")}</th>
                   {manage && <th />}
@@ -318,7 +319,16 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
                         {money0(s.dep, cur)} <span className="text-xs text-muted">×{s.depCount}</span>
                       </td>
                       <td className="r">
-                        {money0(s.pwd, cur)} <span className="text-xs text-muted">×{s.pwdCount}</span>
+                        {money0(s.wd, cur)} <span className="text-xs text-muted">×{s.wdCount}</span>
+                      </td>
+                      <td className="r">
+                        {s.pwdCount ? (
+                          <Link className="link" href={`/promotions/${p.id}/withdrawals?from=${range.from}&to=${range.to}`}>
+                            {money0(s.pwd, cur)} <span className="text-xs text-muted">×{s.pwdCount}</span>
+                          </Link>
+                        ) : (
+                          <span className="text-muted">{money0(0, cur)}</span>
+                        )}
                       </td>
                       <td className="r">{Number.isFinite(cost) ? pct(cost) : "–"}</td>
                       <td className={`r font-medium ${net < 0 ? "text-critical-ink" : ""}`}>{s.claims ? money0(net, cur) : "–"}</td>

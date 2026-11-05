@@ -71,36 +71,59 @@ export async function promoStats(brandIds: number[], range: Range, windowDays: n
 }
 
 /**
- * Withdrawals made in [t0, t1) per promotion, counted the platform's way (its Promotion Report): a withdrawal belongs to
- * the player's latest bonus before it, unless a deposit or a rebate/commission credit came in between.
+ * Withdrawals made in [t0, t1), each with the bonus it was made under, the platform's way (its Promotion Report): a withdrawal
+ * belongs to the player's latest bonus before it, unless a deposit or a rebate/commission came in between. Only completed
+ * withdrawals are kept (rejected ones are removed by the sync), and each counts for one promotion at most.
+ * Ends in a CTE `owned`: withdrawal rows have ord = 2, wid, amount, and owner/claimId (null when no bonus started their run).
  */
-function promoWithdrawals(brandList: Prisma.Sql, t0: Date, t1: Date) {
+function runsSql(brandList: Prisma.Sql, t0: Date, t1: Date) {
   const m0 = new Date(t0.getTime() - RUN_DAYS * 86400_000);
   // Rows in time order per player; each bonus, deposit or credit starts a run (grp), and a run is a promotion's only when a bonus started it.
   // At the same second a deposit comes before a bonus (deposit, then claim the deposit bonus), and both before a withdrawal.
-  return prisma.$queryRaw<{ pid: number; amt: unknown; cnt: bigint }[]>`
+  return Prisma.sql`
     WITH wd AS (
-      SELECT playerId, txnAt AS at, amount FROM \`Txn\`
+      SELECT id, playerId, txnAt AS at, amount FROM \`Txn\`
       WHERE brandId IN (${brandList}) AND type = 'WITHDRAW' AND txnAt >= ${t0} AND txnAt < ${t1}
     ),
     who AS (SELECT DISTINCT playerId FROM wd),
     ev AS (
-      SELECT playerId, at, 2 AS ord, NULL AS pid, amount, 0 AS starts FROM wd
+      SELECT playerId, at, 2 AS ord, id AS wid, NULL AS pid, NULL AS cid, amount, 0 AS starts FROM wd
       UNION ALL
-      SELECT c.playerId, c.claimedAt, 1, c.promotionId, NULL, 1 FROM \`PromoClaim\` c JOIN who USING (playerId)
+      SELECT c.playerId, c.claimedAt, 1, NULL, c.promotionId, c.id, NULL, 1 FROM \`PromoClaim\` c JOIN who USING (playerId)
       WHERE c.claimedAt >= ${m0} AND c.claimedAt < ${t1}
       UNION ALL
-      SELECT t.playerId, t.txnAt, 0, NULL, NULL, 1 FROM \`Txn\` t JOIN who USING (playerId)
+      SELECT t.playerId, t.txnAt, 0, NULL, NULL, NULL, NULL, 1 FROM \`Txn\` t JOIN who USING (playerId)
       WHERE t.type = 'DEPOSIT' AND t.txnAt >= ${m0} AND t.txnAt < ${t1}
       UNION ALL
-      SELECT x.playerId, x.at, 0, NULL, NULL, 1 FROM \`PlayerCredit\` x JOIN who USING (playerId)
+      SELECT x.playerId, x.at, 0, NULL, NULL, NULL, NULL, 1 FROM \`PlayerCredit\` x JOIN who USING (playerId)
       WHERE x.at >= ${m0} AND x.at < ${t1}
     ),
     runs AS (SELECT ev.*, SUM(starts) OVER (PARTITION BY playerId ORDER BY at, ord ROWS UNBOUNDED PRECEDING) AS grp FROM ev),
-    owned AS (SELECT runs.*, MAX(pid) OVER (PARTITION BY playerId, grp) AS owner FROM runs)
+    owned AS (SELECT runs.*, MAX(pid) OVER (PARTITION BY playerId, grp) AS owner, MAX(cid) OVER (PARTITION BY playerId, grp) AS claimId FROM runs)`;
+}
+
+/** Promo withdrawals in [t0, t1) per promotion. */
+function promoWithdrawals(brandList: Prisma.Sql, t0: Date, t1: Date) {
+  return prisma.$queryRaw<{ pid: number; amt: unknown; cnt: bigint }[]>`
+    ${runsSql(brandList, t0, t1)}
     SELECT owner AS pid, SUM(amount) AS amt, COUNT(*) AS cnt FROM owned
     WHERE ord = 2 AND owner IS NOT NULL
     GROUP BY owner`;
+}
+
+/** One promotion's withdrawals in the dates, each with the claim it came from, newest first. */
+export async function promoWithdrawalList(promo: { id: number; brandId: number }, range: Range) {
+  const t0 = dayStart(range.from);
+  const t1 = dayStart(addDays(range.to, 1));
+  const pairs = await prisma.$queryRaw<{ wid: number; claimId: number }[]>`
+    ${runsSql(Prisma.join([promo.brandId]), t0, t1)}
+    SELECT wid, claimId FROM owned WHERE ord = 2 AND owner = ${promo.id}`;
+  const [txns, claims] = await Promise.all([
+    prisma.txn.findMany({ where: { id: { in: pairs.map((x) => Number(x.wid)) } }, include: { player: { select: { id: true, username: true, name: true } } } }),
+    prisma.promoClaim.findMany({ where: { id: { in: pairs.map((x) => Number(x.claimId)) } } }),
+  ]);
+  const claimOf = new Map(pairs.map((x) => [Number(x.wid), claims.find((c) => c.id === Number(x.claimId))!]));
+  return txns.map((w) => ({ w, claim: claimOf.get(w.id)! })).sort((a, b) => b.w.txnAt.getTime() - a.w.txnAt.getTime());
 }
 
 /** W/L after promo, cost ratio and the keep/adjust/cancel suggestion. */
