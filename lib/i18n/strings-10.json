@@ -201,5 +201,12 @@
 ["Off = every row starts empty and staff pick its brand.","不勾 = 每一行都要自己选品牌。","Mati = setiap baris kosong dan staf memilih mereknya sendiri."],
 ["Withdrawal bank","提款银行","Bank penarikan"],
 ["Account no.","户口号码","No. rekening"],
-["Withdrawal bank / account","提款银行 / 户口","Bank / rekening penarikan"]
+["Withdrawal bank / account","提款银行 / 户口","Bank / rekening penarikan"],
+["Deposit times","充值次数","Kali deposit"],
+["Total withdrawals","累计提款","Jumlah penarikan"],
+["Withdrawal times","提款次数","Kali penarikan"],
+["Most deposit times","充值次数最多的优先","Paling banyak kali deposit"],
+["Highest average deposit","平均充值最高的优先","Purata deposit tertinggi"],
+["Most withdrawn","提款最多的优先","Paling banyak penarikan"],
+["Most withdrawal times","提款次数最多的优先","Paling banyak kali penarikan"]
 ]

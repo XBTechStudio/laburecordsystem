@@ -54,10 +54,16 @@ export type PlayerFilter = {
   contacted?: boolean;
   /** Contacted after their last deposit, but the latest contact is older than this: due a second follow-up. */
   refollowBefore?: Date;
-  sort?: "value" | "deposit" | "recent" | "idle" | "net" | "newest";
+  sort?: PlayerSort;
+  /** Lowest first, for the column sorts (deposit … net). */
+  asc?: boolean;
   limit: number;
   offset: number;
 };
+
+export const PLAYER_SORTS = ["value", "deposit", "count", "avg", "withdraw", "wcount", "net", "recent", "idle", "newest"] as const;
+export type PlayerSort = (typeof PLAYER_SORTS)[number];
+export const playerSort = (v: string | undefined) => PLAYER_SORTS.find((s) => s === v);
 
 export async function queryPlayers(s: TierScoring, f: PlayerFilter): Promise<{ rows: PlayerRow[]; total: number }> {
   if (!f.brandIds.length) return { rows: [], total: 0 };
@@ -93,12 +99,17 @@ export async function queryPlayers(s: TierScoring, f: PlayerFilter): Promise<{ r
   if (f.idleAfter) where.push(Prisma.sql`p.lastDepositAt >= ${f.idleAfter}`);
   const cond = Prisma.join(where, " AND ");
 
+  const dir = Prisma.raw(f.asc ? "ASC" : "DESC");
   const order = {
     value: Prisma.sql`score DESC, p.depositTotal DESC`,
-    deposit: Prisma.sql`p.depositTotal DESC`,
+    deposit: Prisma.sql`p.depositTotal ${dir}`,
+    count: Prisma.sql`p.depositCount ${dir}, p.depositTotal ${dir}`,
+    avg: Prisma.sql`IF(p.depositCount > 0, p.depositTotal / p.depositCount, 0) ${dir}`,
+    withdraw: Prisma.sql`p.withdrawTotal ${dir}`,
+    wcount: Prisma.sql`p.withdrawCount ${dir}, p.withdrawTotal ${dir}`,
+    net: Prisma.sql`(p.depositTotal - p.withdrawTotal) ${dir}`,
     recent: Prisma.sql`p.lastDepositAt IS NULL, p.lastDepositAt DESC`,
     idle: Prisma.sql`p.lastDepositAt IS NULL, p.lastDepositAt ASC`,
-    net: Prisma.sql`(p.depositTotal - p.withdrawTotal) DESC`,
     newest: Prisma.sql`p.id DESC`,
   }[f.sort ?? "value"];
 

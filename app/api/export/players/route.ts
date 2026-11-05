@@ -1,12 +1,10 @@
 import type { NextRequest } from "next/server";
 import { can, getUser, seesWithdrawals } from "@/lib/auth";
-import { queryPlayers, statusParam, tierName } from "@/lib/player-query";
+import { playerSort, queryPlayers, statusParam, tierName } from "@/lib/player-query";
 import { getScope } from "@/lib/scope";
 import { getSettings } from "@/lib/settings";
 import { getT } from "@/lib/i18n-server";
 import { round2, xlsxResponse } from "@/lib/xlsx";
-
-const SORTS = ["value", "deposit", "recent", "idle", "net", "newest"] as const;
 
 export async function GET(req: NextRequest) {
   const user = await getUser();
@@ -17,10 +15,9 @@ export async function GET(req: NextRequest) {
     brandIds: scope.brandIds,
     q: sp.q?.trim() || undefined,
     tierRank: sp.tier ? Number(sp.tier) : undefined,
-    assigned: sp.cs === "me" ? "me" : sp.cs === "none" ? "none" : sp.cs ? Number(sp.cs) : undefined,
-    meId: user.id,
     status: statusParam(sp.status),
-    sort: SORTS.find((s) => s === sp.sort) ?? "value",
+    sort: playerSort(sp.sort) ?? "value",
+    asc: sp.dir === "asc",
     limit: 50000,
     offset: 0,
   });

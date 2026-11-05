@@ -203,6 +203,31 @@ body {
   .tbl tfoot td {
     @apply border-t border-b-0 border-line font-semibold;
   }
+  /* Players list: tinted header, tight rows, big coloured figures (deposits blue, average green, withdrawals red). */
+  .tbl-players th {
+    @apply bg-brand-soft px-2 py-2 text-[13px] font-semibold text-ink;
+  }
+  .tbl-players th.sort {
+    @apply text-brand-ink;
+  }
+  .tbl-players td {
+    @apply px-2 py-1 leading-tight;
+  }
+  .tbl-players td.big {
+    @apply text-lg font-bold;
+  }
+  .tbl-players td.mid {
+    @apply text-base font-semibold;
+  }
+  .tbl-players td.dep {
+    color: var(--c-dep);
+  }
+  .tbl-players td.wd {
+    color: var(--c-wd);
+  }
+  .tbl-players td.good {
+    @apply text-good-ink;
+  }
   .chip {
     @apply inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium whitespace-nowrap;
   }
