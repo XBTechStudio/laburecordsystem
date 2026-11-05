@@ -15,10 +15,11 @@ import type { T } from "@/lib/i18n";
 import { getT } from "@/lib/i18n-server";
 import { deleteContact, logContact } from "./actions";
 
-type Row = { id: number; staffId: number; playerId: number; channel: string; replied: number; bonus: unknown; brandId: number; dep: unknown; d: string };
+type Row = { id: number; staffId: number; playerId: number; channel: string; replied: number; bonus: unknown; brandId: number; dep: unknown; d: string; offered: number; claimed: unknown };
 
-type Agg = { contacts: number; players: Set<number>; replied: number; returned: Set<number>; deposits: number; bonus: number };
-const agg = (): Agg => ({ contacts: 0, players: new Set(), replied: 0, returned: new Set(), deposits: 0, bonus: 0 });
+/** offered/claimed: players offered a promotion, and those who then claimed it within the return window. */
+type Agg = { contacts: number; players: Set<number>; replied: number; returned: Set<number>; deposits: number; bonus: number; offered: Set<number>; claimed: Set<number> };
+const agg = (): Agg => ({ contacts: 0, players: new Set(), replied: 0, returned: new Set(), deposits: 0, bonus: 0, offered: new Set(), claimed: new Set() });
 
 export default async function CsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const user = await requirePage("cs");
@@ -100,7 +101,7 @@ export default async function CsPage({ searchParams }: { searchParams: Promise<R
       {tab === "performance" ? (
         <Performance brandIds={scope.brandIds} range={range} recallDays={settings.recallDays} recallMin={settings.recallMinAmount} rate={scope.rate} currency={scope.currency} brandName={scope.brandName} t={t} />
       ) : (
-        <Log sp={sp} brandIds={scope.brandIds} range={range} may={rights.may} note={rights.note} brandCurrency={scope.brandCurrency} t={t} />
+        <Log sp={sp} brandIds={scope.brandIds} range={range} recallDays={settings.recallDays} recallMin={settings.recallMinAmount} may={rights.may} note={rights.note} brandCurrency={scope.brandCurrency} t={t} />
       )}
     </div>
   );
@@ -131,6 +132,9 @@ async function Performance({
   const rows = await prisma.$queryRaw<Row[]>`
     SELECT c.id, c.staffId, c.playerId, c.channel, c.replied, c.bonus, p.brandId,
       DATE_FORMAT(DATE_ADD(c.contactedAt, INTERVAL 8 HOUR), '%Y-%m-%d') AS d,
+      c.promotionId IS NOT NULL AS offered,
+      EXISTS (SELECT 1 FROM \`PromoClaim\` k
+        WHERE k.playerId = c.playerId AND k.promotionId = c.promotionId AND k.claimedAt > c.contactedAt AND k.claimedAt <= DATE_ADD(c.contactedAt, INTERVAL ${recallDays} DAY)) AS claimed,
       (SELECT COALESCE(SUM(t.amount), 0) FROM \`Txn\` t
         WHERE t.playerId = c.playerId AND t.type = 'DEPOSIT' AND t.amount >= ${recallMin} AND t.txnAt > c.contactedAt AND t.txnAt <= DATE_ADD(c.contactedAt, INTERVAL ${recallDays} DAY)) AS dep
     FROM \`ContactLog\` c JOIN \`Player\` p ON p.id = c.playerId
@@ -155,6 +159,8 @@ async function Performance({
     if (Number(r.replied)) a.replied++;
     a.bonus += bonus;
     if (dep > 0) a.returned.add(r.playerId);
+    if (Number(r.offered)) a.offered.add(r.playerId);
+    if (Number(r.claimed)) a.claimed.add(r.playerId);
     return a;
   };
   for (const r of rows) {
@@ -184,6 +190,9 @@ async function Performance({
               <th className="r">{t("Contacts")}</th>
               <th className="r">{t("Players")}</th>
               <th className="r">{t("Replied")}</th>
+              <th className="r" title={t("Players who claimed the offer CS gave them, within the return window, of those given an offer")}>
+                {t("Claimed offer")}
+              </th>
               <th className="r">{t("Returned")}</th>
               <th className="r">{t("Return rate")}</th>
               <th className="r">{t("Deposits after contact")}</th>
@@ -200,6 +209,15 @@ async function Performance({
                 <td className="r">{count(a.contacts)}</td>
                 <td className="r">{count(a.players.size)}</td>
                 <td className="r">{pct(ratio(a.replied, a.contacts), 0)}</td>
+                <td className="r">
+                  {a.offered.size ? (
+                    <>
+                      {count(a.claimed.size)} <span className="text-xs text-muted">/ {count(a.offered.size)}</span>
+                    </>
+                  ) : (
+                    <span className="text-muted">–</span>
+                  )}
+                </td>
                 <td className="r font-medium">{count(a.returned.size)}</td>
                 <td className="r">{pct(ratio(a.returned.size, a.players.size), 0)}</td>
                 <td className="r">{money0(a.deposits, currency)}</td>
@@ -259,6 +277,8 @@ async function Log({
   sp,
   brandIds,
   range,
+  recallDays,
+  recallMin,
   may,
   note,
   brandCurrency,
@@ -267,6 +287,8 @@ async function Log({
   sp: Record<string, string | undefined>;
   brandIds: number[];
   range: { from: string; to: string };
+  recallDays: number;
+  recallMin: number;
   may: (authorId: number | null, createdAt: Date) => boolean;
   note: string;
   brandCurrency: (id: number) => string;
@@ -284,6 +306,23 @@ async function Log({
     prisma.contactLog.count({ where }),
     prisma.user.findMany({ where: { contacts: { some: {} } }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
   ]);
+  // After each contact, within the return window: the first claim of the offer CS gave, and the first deposit.
+  type After = { id: number; claimAt: Date | null; claimAmt: unknown; depAt: Date | null; depAmt: unknown };
+  const found = rows.length
+    ? await prisma.$queryRaw<After[]>`
+        SELECT c.id, k.claimedAt AS claimAt, k.amount AS claimAmt, d.txnAt AS depAt, d.amount AS depAmt
+        FROM \`ContactLog\` c
+        LEFT JOIN \`PromoClaim\` k ON k.id = (
+          SELECT k2.id FROM \`PromoClaim\` k2
+          WHERE k2.playerId = c.playerId AND k2.promotionId = c.promotionId AND k2.claimedAt > c.contactedAt AND k2.claimedAt <= DATE_ADD(c.contactedAt, INTERVAL ${recallDays} DAY)
+          ORDER BY k2.claimedAt LIMIT 1)
+        LEFT JOIN \`Txn\` d ON d.id = (
+          SELECT d2.id FROM \`Txn\` d2
+          WHERE d2.playerId = c.playerId AND d2.type = 'DEPOSIT' AND d2.amount >= ${recallMin} AND d2.txnAt > c.contactedAt AND d2.txnAt <= DATE_ADD(c.contactedAt, INTERVAL ${recallDays} DAY)
+          ORDER BY d2.txnAt LIMIT 1)
+        WHERE c.id IN (${Prisma.join(rows.map((r) => r.id))})`
+    : [];
+  const after = new Map(found.map((x) => [Number(x.id), x]));
   const keep = clean({ ...sp, tab: undefined });
   return (
     <Card
@@ -328,6 +367,8 @@ async function Log({
                 <th>{t("Offer")}</th>
                 <th className="r">{t("Bonus")}</th>
                 <th>{t("Reply")}</th>
+                <th title={t("The first claim of this offer within {n} days after the contact", { n: recallDays })}>{t("Claimed offer")}</th>
+                <th title={t("The first deposit within {n} days after the contact", { n: recallDays })}>{t("Came back to deposit")}</th>
                 <th>{t("Result")}</th>
                 <th />
               </tr>
@@ -346,6 +387,14 @@ async function Log({
                   <td className="text-ink-2">{c.promotion?.name ?? "–"}</td>
                   <td className="r">{n(c.bonus) ? money(c.bonus, brandCurrency(c.player.brandId)) : "–"}</td>
                   <td>{c.replied ? <Chip tone="good">{t("Replied")}</Chip> : <Chip>{t("No reply")}</Chip>}</td>
+                  <td className="whitespace-nowrap">
+                    {!c.promotionId ? (
+                      <span className="text-muted">–</span>
+                    ) : <Happened at={after.get(c.id)?.claimAt} amount={after.get(c.id)?.claimAmt} cur={brandCurrency(c.player.brandId)} t={t} />}
+                  </td>
+                  <td className="whitespace-nowrap">
+                    <Happened at={after.get(c.id)?.depAt} amount={after.get(c.id)?.depAmt} cur={brandCurrency(c.player.brandId)} t={t} />
+                  </td>
                   <td className="max-w-64 truncate text-ink-2">{c.result ?? ""}</td>
                   <td className="r">
                     {may(c.staffId, c.createdAt) && (
@@ -362,5 +411,16 @@ async function Log({
       )}
       <Pager page={page} pages={Math.ceil(total / 50)} href={(p) => `/cs?${new URLSearchParams({ ...keep, tab: "log", page: String(p) })}`} />
     </Card>
+  );
+}
+
+/** A claim or deposit after a contact: its amount and time, or "Not yet". */
+function Happened({ at, amount, cur, t }: { at?: Date | null; amount?: unknown; cur: string; t: T }) {
+  if (!at) return <Chip>{t("Not yet")}</Chip>;
+  return (
+    <>
+      <Chip tone="good">{money(amount as number, cur)}</Chip>
+      <div className="text-xs text-muted">{dt(at)}</div>
+    </>
   );
 }
