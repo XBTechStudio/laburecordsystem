@@ -41,8 +41,9 @@ const TYPE_ALIASES = {
   取款: "WITHDRAW",
 };
 
-/** One data entry form (deposits & withdrawals, Lucky Box or players) and what was entered with it on a day. */
-export async function EntryView({ user, kind, sp }: { user: CurrentUser; kind: Kind; sp: Record<string, string | undefined> }) {
+/** One data entry form (deposits & withdrawals, Lucky Box or players) and what was entered with it on a day.
+ *  `bare` gives only the form, with its title, to show inside another page (the Lucky Box page shows its own). */
+export async function EntryView({ user, kind, sp, bare = false }: { user: CurrentUser; kind: Kind; sp: Record<string, string | undefined>; bare?: boolean }) {
   const [scope, t, settings] = await Promise.all([getScope(user), getT(), getSettings()]);
   const channels = await prisma.payChannel.findMany({ where: { active: true }, orderBy: [{ type: "asc" }, { name: "asc" }] });
   const chOpts = channels.map((c) => ({ value: String(c.id), label: c.name }));
@@ -102,6 +103,23 @@ export async function EntryView({ user, kind, sp }: { user: CurrentUser; kind: K
       ["WITHDRAW", "withdrawals", t("Withdrawals")],
     ] as const
   ).filter(([, m]) => can(user, m, 2));
+
+  if (bare && kind !== "txn")
+    return (
+      <BatchEntry
+        kind={kind}
+        title={t(PAGES[kind].title)}
+        cols={shown(cols[kind])}
+        carryBrand={settings.entry.carryBrand}
+        enterSaves={settings.entry.enterSaves}
+        brands={brands}
+        brandId={brandId}
+        save={saveBatch}
+        loadLists={loadLists}
+        note={notes[kind]}
+        totals={kind === "box" ? [{ col: "amount", label: t("Lucky Box") }] : []}
+      />
+    );
 
   return (
     <Shell kind={kind} imports={can(user, "import", 2)} back={PAGES[kind].back && can(user, PAGES[kind].back.module) ? PAGES[kind].back : null} t={t}>

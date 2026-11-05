@@ -4,6 +4,7 @@ import { RangeBar } from "@/components/range";
 import { Card, Chip, Empty, Field, Info, PageHeader, TableWrap } from "@/components/ui";
 import { BoxRuleForm } from "../promotions/box-form";
 import { EditCell } from "../entry/edit-cell";
+import { EntryView } from "../entry/view";
 import { autoRelease, boxText, type BoxRule } from "@/lib/box-rule";
 import { can, requirePage } from "@/lib/auth";
 import { dayStart, addDays, parseRange } from "@/lib/dates";
@@ -47,6 +48,8 @@ export default async function LuckyBoxPage({ searchParams }: { searchParams: Pro
   const act = can(user, "luckybox", 2);
   const full = can(user, "luckybox", 3);
   const manage = can(user, "promotions", 3);
+  // Staff who may enter data put points into boxes right on this page.
+  const enter = can(user, "entry", 2);
   const status = STATUS.find((s) => s.value === sp.status)?.value ?? "open";
   const q = (sp.q ?? "").trim().toLowerCase();
 
@@ -102,9 +105,11 @@ export default async function LuckyBoxPage({ searchParams }: { searchParams: Pro
           </>
         }
         actions={
-          <Link href="/lucky-box/add" className="btn btn-primary">
-            + {t("Put into a box")}
-          </Link>
+          enter && (
+            <a href="#put" className="btn btn-primary">
+              + {t("Put into a box")}
+            </a>
+          )
         }
       />
 
@@ -300,6 +305,12 @@ export default async function LuckyBoxPage({ searchParams }: { searchParams: Pro
             )}
           </Card>
         </>
+      )}
+
+      {enter && (
+        <div id="put" className="mt-5 scroll-mt-4">
+          <EntryView user={user} kind="box" sp={{}} bare />
+        </div>
       )}
     </div>
   );
