@@ -37,12 +37,41 @@ function Items({ nav, onPick, query }: { nav: NavGroup[]; onPick?: () => void; q
     if (queried && queried.href.split("?")[0] === href) return false;
     return href === best;
   };
+  const [closed, setClosed] = useState<string[]>([]);
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(CLOSED_KEY) ?? "[]");
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (Array.isArray(saved)) setClosed(saved.filter((x) => typeof x === "string"));
+    } catch {}
+  }, []);
+  const toggle = (group: string) => {
+    const next = closed.includes(group) ? closed.filter((x) => x !== group) : [...closed, group];
+    setClosed(next);
+    try {
+      localStorage.setItem(CLOSED_KEY, JSON.stringify(next));
+    } catch {}
+  };
   return (
     <>
-      {nav.map((g) => (
-        <div key={g.group || "-"} className="mb-4">
-          {g.group && <div className="px-2 pb-1 text-[11px] tracking-wider text-[var(--side-muted)] uppercase">{g.group}</div>}
-          {g.items.map((it) => (
+      {nav.map((g) => {
+        const shut = !!g.group && closed.includes(g.group);
+        return (
+        <div key={g.group || "-"} className="mb-3">
+          {g.group && (
+            <button
+              type="button"
+              onClick={() => toggle(g.group)}
+              aria-expanded={!shut}
+              className="flex w-full items-center justify-between rounded-md px-2 py-1 text-left text-sm font-bold tracking-wide text-brand-ink uppercase hover:bg-[var(--side-hover)]"
+            >
+              <span>{g.group}</span>
+              <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden className={`h-4 w-4 transition-transform ${shut ? "-rotate-90" : ""}`}>
+                <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.17l3.71-3.94a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z" clipRule="evenodd" />
+              </svg>
+            </button>
+          )}
+          {!shut && g.items.map((it) => (
             <Link
               key={it.href}
               href={it.href}
@@ -55,10 +84,14 @@ function Items({ nav, onPick, query }: { nav: NavGroup[]; onPick?: () => void; q
             </Link>
           ))}
         </div>
-      ))}
+        );
+      })}
     </>
   );
 }
+
+/** Which menu headings the viewer has folded away, remembered in this browser. */
+const CLOSED_KEY = "nav-closed-groups";
 
 export function Shell({ nav, brandName, top, children }: { nav: NavGroup[]; brandName: string; top: ReactNode; children: ReactNode }) {
   const [open, setOpen] = useState(false);
