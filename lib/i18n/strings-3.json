@@ -98,6 +98,7 @@
 ["Of each incoming amount","按每笔入款金额","Dari setiap jumlah masuk"],
 ["Offer","优惠","Penawaran"],
 ["Offer used","使用的优惠","Penawaran yang dipakai"],
+["Whether CS can pick it under Offer used when logging a contact","客服记录联系时，能不能在「使用的优惠」里选到它（其他品牌里同名的优惠也会一起设定）","Sama ada CS boleh memilihnya di bawah Penawaran yang dipakai semasa merekod hubungan (juga untuk promosi dengan nama yang sama dalam jenama lain anda)"],
 ["Oldest first","最早的排前面","Terlama dulu"],
 ["Once saved, these numbers stay fixed even if data or shares change later.","保存后，即使之后数据或股份有改动，这些数字也不会变。","Setelah disimpan, angka ini tetap meski data atau saham berubah nanti."],
 ["One per line. CS pick from this list when they log a contact.","每行一个。客服记录联系时从这里选。","Satu per baris. CS memilih dari daftar ini saat mencatat kontak."],

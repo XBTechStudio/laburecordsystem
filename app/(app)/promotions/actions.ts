@@ -57,6 +57,19 @@ export async function setCategory(_p: Result, fd: FormData) {
   });
 }
 
+/** Shows or hides a promotion under "Offer used" in the CS contact form, together with the promotions of the same name in the other brands this user can see. */
+export async function toggleCsOffer(_p: Result, fd: FormData) {
+  return run(async () => {
+    const user = await guard("promotions", 3);
+    const p = await prisma.promotion.findUniqueOrThrow({ where: { id: int(fd, "id") } });
+    assertBrand(user, p.brandId);
+    const csOffer = !p.csOffer;
+    await prisma.promotion.updateMany({ where: { name: p.name, ...(user.brandIds ? { brandId: { in: user.brandIds } } : {}) }, data: { csOffer } });
+    await audit(user, "UPDATE", "Promotion", p.id, p.brandId, `${csOffer ? "Showed" : "Hid"} ${p.name} under Offer used`);
+    revalidatePath("/promotions");
+  });
+}
+
 export async function togglePromotion(_p: Result, fd: FormData) {
   return run(async () => {
     const user = await guard("promotions", 3);

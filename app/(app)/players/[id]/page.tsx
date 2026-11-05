@@ -48,7 +48,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
     prisma.$queryRaw<{ m: string; type: string; amt: unknown; cnt: bigint }[]>`
       SELECT DATE_FORMAT(DATE_ADD(txnAt, INTERVAL 8 HOUR), '%Y-%m') AS m, type, SUM(amount) AS amt, COUNT(*) AS cnt
       FROM \`Txn\` WHERE playerId = ${id} AND (type = 'DEPOSIT' OR ${seeWd}) AND txnAt >= DATE_SUB(NOW(), INTERVAL 12 MONTH) GROUP BY m, type ORDER BY m`,
-    prisma.promotion.findMany({ where: { brandId: player.brandId, active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    prisma.promotion.findMany({ where: { brandId: player.brandId, active: true, csOffer: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
     can(user, "churn", 3) || full ? prisma.user.findMany({ where: { active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }) : Promise.resolve([]),
     prisma.txn.findFirst({ where: { playerId: id }, orderBy: { txnAt: "asc" }, select: { txnAt: true } }),
   ]);

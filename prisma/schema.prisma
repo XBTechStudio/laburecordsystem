@@ -379,6 +379,8 @@ model Promotion {
   active    Boolean   @default(true)
   /// One of Settings → promoCategories (e.g. "免费赠送"); null = no category.
   category  String?   @db.VarChar(60)
+  /// Listed under "Offer used" when CS log a contact (while running). Managers hide ones CS never offer.
+  csOffer   Boolean   @default(true)
   /// Claim conditions the system tracks (see lib/promo-rule.ts). null = the promotion is only analysed from its claims.
   rule      Json?
   /// Tracking runs between these days (inclusive); null = no limit.

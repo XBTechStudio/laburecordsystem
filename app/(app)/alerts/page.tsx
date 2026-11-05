@@ -76,7 +76,7 @@ export default async function AlertsPage({ searchParams }: { searchParams: Promi
     }),
     prisma.alert.count({ where }),
     prisma.alert.groupBy({ by: ["kind"], where: { ...base, doneAt: null }, _count: true }),
-    prisma.promotion.findMany({ where: { brandId: { in: scope.brandIds }, active: true }, select: { id: true, name: true, brandId: true }, orderBy: { name: "asc" } }),
+    prisma.promotion.findMany({ where: { brandId: { in: scope.brandIds }, active: true }, select: { id: true, name: true, brandId: true, csOffer: true }, orderBy: { name: "asc" } }),
     full ? prisma.user.findMany({ where: { active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }) : Promise.resolve([]),
   ]);
   const openCount = (k?: string) => byKind.filter((b) => !k || b.kind === k).reduce((a, b) => a + b._count, 0);
@@ -197,7 +197,7 @@ export default async function AlertsPage({ searchParams }: { searchParams: Promi
                               playerId={a.playerId}
                               channels={settings.csChannels}
                               templates={settings.csTemplates}
-                              promos={promos.filter((p) => p.brandId === a.brandId)}
+                              promos={promos.filter((p) => p.brandId === a.brandId && (p.csOffer || p.id === a.promotionId))}
                               promotionId={a.promotionId}
                             />
                           </Dialog>

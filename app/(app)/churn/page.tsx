@@ -55,7 +55,7 @@ export default async function ChurnPage({ searchParams }: { searchParams: Promis
   const [list, counts, promos] = await Promise.all([
     queryPlayers(settings.tierScoring, { ...base, idleBefore: tab.idleBefore, idleAfter: tab.idleAfter, sort, asc, limit: PER_PAGE, offset: (page - 1) * PER_PAGE }),
     Promise.all(tabs.map((t) => queryPlayers(settings.tierScoring, { ...base, idleBefore: t.idleBefore, idleAfter: t.idleAfter, limit: 0, offset: 0 }).then((r) => r.total))),
-    prisma.promotion.findMany({ where: { brandId: { in: scope.brandIds }, active: true }, select: { id: true, name: true, brandId: true }, orderBy: { name: "asc" } }),
+    prisma.promotion.findMany({ where: { brandId: { in: scope.brandIds }, active: true, csOffer: true }, select: { id: true, name: true, brandId: true }, orderBy: { name: "asc" } }),
   ]);
   const ids = list.rows.map((r) => r.id);
   const contacts = ids.length

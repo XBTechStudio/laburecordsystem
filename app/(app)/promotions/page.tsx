@@ -14,7 +14,7 @@ import { BoxRuleForm } from "./box-form";
 import { boxText, readBox } from "@/lib/box-rule";
 import { getScope } from "@/lib/scope";
 import { getSettings } from "@/lib/settings";
-import { saveConditions, savePromotion, setCategory, togglePromotion } from "./actions";
+import { saveConditions, savePromotion, setCategory, toggleCsOffer, togglePromotion } from "./actions";
 import { tk, type T } from "@/lib/i18n";
 import { getT } from "@/lib/i18n-server";
 
@@ -233,6 +233,7 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
                   <th>{t("Promotion")}</th>
                   {multi && <th>{t("Brand")}</th>}
                   <th>{t("Category")}</th>
+                  <th title={t("Whether CS can pick it under Offer used when logging a contact")}>{t("Offer used")}</th>
                   <th className="r">{t("Claimers")}</th>
                   <th className="r">{t("Claims")}</th>
                   <th className="r">{t("Bonus given")}</th>
@@ -285,6 +286,17 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
                           </ActionForm>
                         ) : (
                           (p.category && <Chip>{p.category}</Chip>) || <span className="text-muted">–</span>
+                        )}
+                      </td>
+                      <td title={t("Whether CS can pick it under Offer used when logging a contact")}>
+                        {manage ? (
+                          <ActionButton action={toggleCsOffer} fields={{ id: p.id }} className={`btn btn-sm ${p.csOffer ? "" : "text-muted"}`}>
+                            {p.csOffer ? `✓ ${t("Show")}` : t("Hidden")}
+                          </ActionButton>
+                        ) : p.csOffer ? (
+                          <Chip tone="brand">{t("Show")}</Chip>
+                        ) : (
+                          <span className="text-muted">{t("Hidden")}</span>
                         )}
                       </td>
                       <td className="r">{count(s.claimers)}</td>
