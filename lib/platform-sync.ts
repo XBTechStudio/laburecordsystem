@@ -1,10 +1,12 @@
 import "server-only";
 
 import type { PlatformLink, Prisma } from "@prisma/client";
+import { audit } from "@/lib/audit";
 import { prisma } from "@/lib/db";
 import { addDays } from "@/lib/dates";
 import { phoneKey } from "@/lib/format";
 import {
+  call,
   getDailyBets,
   getTransactions,
   getUsers,
@@ -37,7 +39,7 @@ const LOOKBACK = 2 * HOUR;
 const DEEP_LOOKBACK = 48 * HOUR;
 
 export type ChannelMap = Record<string, { id: number; label: string }>;
-export type SyncResult = { txns: number; claims: number; players: number; betDays: number; pages: number; more: boolean };
+export type SyncResult = { txns: number; claims: number; players: number; betDays: number; pages: number; more: boolean; /** Synced transactions removed because the platform rejected or cancelled them afterwards. */ undone: number };
 
 export const credsOf = (l: Pick<PlatformLink, "apiUrl" | "merchantId" | "accessId" | "tokenEnc">): Creds => ({
   apiUrl: l.apiUrl,
@@ -241,6 +243,51 @@ async function saveTxns(link: PlatformLink & { brand: { name: string; currency: 
   return { txns, claims, players: players.created };
 }
 
+/** Brands whose undone transactions have been looked for since the server started (the first look reaches further back). */
+const swept = new Set<number>();
+/** How far back undone transactions are looked for: every hour, and on the first run after a start. */
+const UNDONE_LOOKBACK = 7 * 24 * HOUR;
+const UNDONE_FIRST_LOOKBACK = 35 * 24 * HOUR;
+
+/**
+ * Staff sometimes reject or cancel a deposit or withdrawal after it completed, e.g. to split a manual top-up of 100 into
+ * 30 + 30 + 40. We saved it while it was completed, so it is removed here once the platform lists it as rejected or cancelled.
+ * Only rows the sync saved itself are removed, never ones staff entered or imported.
+ */
+async function dropUndone(link: PlatformLink, c: Creds, out: SyncResult, now: Date) {
+  const from = new Date(Math.max(now.getTime() - (swept.has(link.id) ? UNDONE_LOOKBACK : UNDONE_FIRST_LOOKBACK), link.startAt.getTime()));
+  const undone = new Map<string, { type: "DEPOSIT" | "WITHDRAW"; status: string }>();
+  for (const status of ["REJECTED", "CANCELLED"])
+    for (const type of ["DEPOSIT", "WITHDRAW"] as const)
+      for (let p = 0; ; p++) {
+        out.pages++;
+        const page = await call<{ transactions: PlatformTxn[]; totalPage: number }>(c, "/transactions/getAllTransactions", {
+          sDate: platformTime(from, link.timeZone),
+          eDate: platformTime(now, link.timeZone),
+          pageIndex: p,
+          type,
+          status,
+        });
+        for (const t of page.transactions ?? []) undone.set(t.id, { type, status });
+        if (p + 1 >= (page.totalPage || 0)) break;
+      }
+  swept.add(link.id);
+  if (!undone.size) return;
+  const gone = await prisma.txn.findMany({
+    where: { brandId: link.brandId, ref: { in: [...undone.keys()] }, createdById: null, importId: null },
+    include: { player: { select: { username: true } } },
+  });
+  const rows = gone.filter((t) => undone.get(t.ref!)?.type === t.type);
+  if (!rows.length) return;
+  await prisma.txn.deleteMany({ where: { id: { in: rows.map((t) => t.id) } } });
+  const ids = [...new Set(rows.map((t) => t.playerId))];
+  await refreshPlayerStats(ids);
+  await safely("platform undone", () => trackPlayers(ids, rows.map((t) => t.txnAt)));
+  out.undone += rows.length;
+  for (const t of rows)
+    await audit(null, "DELETE", "Txn", t.id, link.brandId, `Platform ${undone.get(t.ref!)!.status.toLowerCase()} ${t.type.toLowerCase()} ${t.ref} of ${t.amount} for ${t.player.username} after it completed`, t);
+}
+
 /** Deposits, withdrawals and bonus claims, read up to six hours at a time from where the last run stopped. */
 async function syncTxns(link: PlatformLink & { brand: { name: string; currency: string } }, c: Creds, out: SyncResult, map: ChannelMap) {
   const now = new Date();
@@ -290,6 +337,7 @@ async function syncTxns(link: PlatformLink & { brand: { name: string; currency: 
     cursor = to;
     from = to;
   }
+  if (deep && !out.more && link.syncTxns) await dropUndone(link, c, out, now);
   // The cursor moves past each fully read window, so a long catch-up continues where it stopped.
   const data: Prisma.PlatformLinkUpdateInput = { channelMap: map };
   if (cursor && (!link.txnCursor || cursor > link.txnCursor)) data.txnCursor = cursor;
@@ -398,7 +446,7 @@ const running = new Set<number>();
 
 /** One brand's sync. Saves when it ran, what it added and what went wrong. */
 export async function syncLink(linkId: number, force = false): Promise<SyncResult & { error?: string }> {
-  const out: SyncResult = { txns: 0, claims: 0, players: 0, betDays: 0, pages: 0, more: false };
+  const out: SyncResult = { txns: 0, claims: 0, players: 0, betDays: 0, pages: 0, more: false, undone: 0 };
   if (running.has(linkId)) return { ...out, error: "A sync for this brand is already running." };
   running.add(linkId);
   try {
