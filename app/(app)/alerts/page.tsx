@@ -55,7 +55,8 @@ export default async function AlertsPage({ searchParams }: { searchParams: Promi
   }
   const act = can(user, "alerts", 2);
   const tab = sp.tab === "done" ? "done" : "open";
-  const who = full && sp.who === "all" ? "all" : "mine";
+  // Everyone's alerts unless they pick their own: the team sees what is open (only Full access acts on other CS's).
+  const who = sp.who === "mine" ? "mine" : "all";
   const kind = KINDS.find((k) => k === sp.kind);
   const page = Math.max(1, Number(sp.page) || 1);
 
@@ -77,7 +78,7 @@ export default async function AlertsPage({ searchParams }: { searchParams: Promi
     prisma.alert.count({ where }),
     prisma.alert.groupBy({ by: ["kind"], where: { ...base, doneAt: null }, _count: true }),
     prisma.promotion.findMany({ where: { brandId: { in: scope.brandIds }, active: true }, select: { id: true, name: true, brandId: true, csOffer: true }, orderBy: { name: "asc" } }),
-    full ? prisma.user.findMany({ where: { active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }) : Promise.resolve([]),
+    prisma.user.findMany({ where: { active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
   ]);
   const openCount = (k?: string) => byKind.filter((b) => !k || b.kind === k).reduce((a, b) => a + b._count, 0);
   const staffName = new Map(staff.map((s) => [s.id, s.name]));
@@ -122,12 +123,10 @@ export default async function AlertsPage({ searchParams }: { searchParams: Promi
             </option>
           ))}
         </AutoSelect>
-        {full && (
-          <AutoSelect name="who" defaultValue={who} className="input h-8 w-auto">
-            <option value="mine">{t("My alerts")}</option>
-            <option value="all">{t("Everyone's alerts")}</option>
-          </AutoSelect>
-        )}
+        <AutoSelect name="who" defaultValue={who} className="input h-8 w-auto">
+          <option value="all">{t("Everyone's alerts")}</option>
+          <option value="mine">{t("My alerts")}</option>
+        </AutoSelect>
       </form>
 
       <Card flush>
@@ -156,6 +155,8 @@ export default async function AlertsPage({ searchParams }: { searchParams: Promi
                   const staffId = forStaff(a.staffId);
                   const forWho = staffId ? (staffId === user.id ? t("You") : (staffName.get(staffId) ?? a.player.assignedTo?.name ?? t("Another CS"))) : t("Everyone on the brand");
                   const bonusAlert = (k === "ELIGIBLE" || k === "EXPIRING") && a.awardId;
+                  // Another CS's alert: shown to everyone, handled by them (or someone with Full access).
+                  const mayAct = act && (full || !staffId || staffId === user.id);
                   return (
                     <tr key={a.id} className={focus === a.id ? "bg-brand-soft" : ""}>
                       <td>
@@ -186,7 +187,8 @@ export default async function AlertsPage({ searchParams }: { searchParams: Promi
                           </>
                         )}
                       </td>
-                      {tab === "open" && act && (
+                      {tab === "open" && act && !mayAct && <td />}
+                      {tab === "open" && mayAct && (
                         <td className="r space-x-1 whitespace-nowrap">
                           <Dialog label={t("Log contact")} title={t("Log contact: {name}", { name: a.player.username })} className="btn btn-sm btn-primary">
                             <div className="mb-3 rounded-lg bg-surface-2 px-3 py-2 text-sm">

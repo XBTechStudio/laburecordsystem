@@ -24,11 +24,11 @@ export async function mutedStaff(s: Settings): Promise<number[]> {
 
 /**
  * Alerts this person may see. mine = addressed to them, or to everyone on a brand they handle;
- * all = every alert on their brands (Full access only).
+ * all = every alert on their brands (anyone who receives alerts, or has Full access; only Full access acts on other CS's).
  */
 export function alertScope(user: CurrentUser, s: Settings, brandIds: number[], mode: "mine" | "all", muted: number[]): Prisma.AlertWhereInput {
   const brands = { brandId: { in: brandIds } };
-  if (mode === "all" && can(user, "alerts", 3)) return brands;
-  if (!getsAlerts(user, s)) return { id: -1 };
+  if (!getsAlerts(user, s) && !can(user, "alerts", 3)) return { id: -1 };
+  if (mode === "all") return brands;
   return { ...brands, OR: [{ staffId: user.id }, { staffId: null }, ...(muted.length ? [{ staffId: { in: muted } }] : [])] };
 }
