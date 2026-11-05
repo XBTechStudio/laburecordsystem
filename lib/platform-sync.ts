@@ -246,8 +246,8 @@ async function saveTxns(link: PlatformLink & { brand: { name: string; currency: 
 /** Brands whose undone transactions have been looked for since the server started (the first look reaches further back). */
 const swept = new Set<number>();
 /** How far back undone transactions are looked for every hour. Staff undo within minutes to an hour (they reject, then re-enter
- *  the split amounts), so two days is plenty; the first run after a start (at least weekly) reaches back further. */
-const UNDONE_LOOKBACK = 48 * HOUR;
+ *  the split amounts), so six hours is plenty; the first run after a start (at least weekly) reaches back further. */
+const UNDONE_LOOKBACK = 6 * HOUR;
 /** On the first run after a start (the server restarts weekly), to catch anything the hourly look missed. */
 const UNDONE_FIRST_LOOKBACK = 7 * 24 * HOUR;
 
