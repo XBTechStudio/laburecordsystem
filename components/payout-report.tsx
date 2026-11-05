@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { RangeBar } from "@/components/range";
 import { Card, Empty, Info, PageHeader, TableWrap } from "@/components/ui";
-import { requirePage } from "@/lib/auth";
+import { requirePage, seesWithdrawals } from "@/lib/auth";
 import { addDays, dayOf, dayStart, mondayOf, parseRange } from "@/lib/dates";
 import { prisma } from "@/lib/db";
 import { count, dt, money, money0, n } from "@/lib/format";
 import { getT } from "@/lib/i18n-server";
 import { getScope } from "@/lib/scope";
 import { BrandTag } from "@/components/brand-tag";
+import { downlineSums, type DownSum } from "@/lib/downlines";
 
 const MAX_ROWS = 300;
 
@@ -81,6 +82,25 @@ export async function PayoutReport({
       })
     ).map((p) => [p.id, p]),
   );
+  // Commission: what each paid player's direct downlines did in the same dates (lib/downlines.ts).
+  const seeWd = seesWithdrawals(user);
+  const down = byWeek
+    ? await downlineSums(
+        await prisma.player.findMany({ where: { id: { in: [...players.keys()] } }, select: { id: true, brandId: true, extId: true } }),
+        dayStart(range.from),
+        dayStart(addDays(range.to, 1)),
+      )
+    : new Map<number, DownSum>();
+  const downTotal = { direct: 0, depositors: 0, deposit: 0, withdraw: 0 };
+  for (const [id, s] of down) {
+    const r = scope.rate(players.get(id)!.brandId);
+    downTotal.direct += s.direct;
+    downTotal.depositors += s.depositors;
+    downTotal.deposit += s.deposit * r;
+    downTotal.withdraw += s.withdraw * r;
+  }
+  // The player's name opens their downlines for the same dates.
+  const keep = new URLSearchParams(Object.entries(sp).filter((e): e is [string, string] => !!e[1] && e[0] !== "q")).toString();
   const periodRows = [...periods.entries()].sort((a, b) => b[0].localeCompare(a[0]));
 
   const title = byWeek ? t("Commission") : t("Rebate");
@@ -125,6 +145,29 @@ export async function PayoutReport({
           </div>
         ))}
       </div>
+
+      {byWeek && players.size > 0 && (
+        <div className={`mb-5 grid grid-cols-2 gap-3 ${seeWd ? "md:grid-cols-5" : "md:grid-cols-3"}`}>
+          {(
+            [
+              [t("Direct downlines"), count(downTotal.direct), ""],
+              [t("Downlines who deposited"), count(downTotal.depositors), ""],
+              [t("Downline deposits"), money0(downTotal.deposit, scope.currency), ""],
+              ...(seeWd
+                ? [
+                    [t("Downline withdrawals"), money0(downTotal.withdraw, scope.currency), ""],
+                    [t("Downline win/loss"), money0(downTotal.deposit - downTotal.withdraw, scope.currency), downTotal.deposit - downTotal.withdraw < 0 ? "text-critical-ink" : ""],
+                  ]
+                : []),
+            ] as [string, string, string][]
+          ).map(([l, v, c]) => (
+            <div key={l} className="card p-3.5">
+              <div className="text-xs text-ink-2">{l}</div>
+              <div className={`mt-1 text-lg font-semibold whitespace-nowrap ${c}`}>{v}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {claims.length === 0 ? (
         <Card>
@@ -201,17 +244,27 @@ export async function PayoutReport({
                     <th className="r">{t("Total")}</th>
                     <th className="r">{t("Average")}</th>
                     <th>{t("Last paid")}</th>
+                    {byWeek && (
+                      <>
+                        <th className="r">{t("Direct downlines")}</th>
+                        <th className="r">{t("Downlines who deposited")}</th>
+                        <th className="r">{t("Downline deposits")}</th>
+                        {seeWd && <th className="r">{t("Downline withdrawals")}</th>}
+                        {seeWd && <th className="r">{t("Downline win/loss")}</th>}
+                      </>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
                   {top.map(([id, p]) => {
                     const pl = info.get(id);
                     const cur = scope.brandCurrency(p.brandId);
+                    const d = down.get(id);
                     return (
                       <tr key={id}>
                         {multi && <td><BrandTag id={p.brandId} /></td>}
                         <td>
-                          <Link className="link font-medium" href={`/players/${id}`}>
+                          <Link className="link font-medium" href={byWeek ? `/commission/${id}${keep ? `?${keep}` : ""}` : `/players/${id}`}>
                             {pl?.username ?? `#${id}`}
                           </Link>
                           {pl?.name && <div className="text-xs text-muted">{pl.name}</div>}
@@ -221,6 +274,15 @@ export async function PayoutReport({
                         <td className="r font-medium">{money(p.amount, cur)}</td>
                         <td className="r">{money(p.amount / p.payouts, cur)}</td>
                         <td className="whitespace-nowrap text-ink-2">{dt(p.last)}</td>
+                        {byWeek && (
+                          <>
+                            <td className="r">{count(d?.direct ?? 0)}</td>
+                            <td className="r">{count(d?.depositors ?? 0)}</td>
+                            <td className="r">{money(d?.deposit ?? 0, cur)}</td>
+                            {seeWd && <td className="r">{money(d?.withdraw ?? 0, cur)}</td>}
+                            {seeWd && <td className={`r font-medium ${(d?.deposit ?? 0) - (d?.withdraw ?? 0) < 0 ? "text-critical-ink" : ""}`}>{money((d?.deposit ?? 0) - (d?.withdraw ?? 0), cur)}</td>}
+                          </>
+                        )}
                       </tr>
                     );
                   })}

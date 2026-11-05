@@ -133,5 +133,19 @@
 ["Shows in Follow-up alerts and pops up.", "会出现在跟进提醒并弹窗。", "Dipaparkan dalam Peringatan susulan dan muncul."],
 ["In short:", "简单说：", "Ringkasnya:"],
 ["Unticking stops the Lucky Box; boxes and their history stay.", "取消勾选会停用 Lucky Box，宝箱和记录会保留。", "Nyahtanda menghentikan Lucky Box; box dan sejarahnya kekal."],
-["They don't expire","不过期","Tidak tamat tempoh"]
+["They don't expire","不过期","Tidak tamat tempoh"],
+["Commission paid", "已发佣金", "Komisen dibayar"],
+["Direct downlines", "直属下线人数", "Downline langsung"],
+["Downlines who deposited", "周期内充值下线人数", "Downline yang deposit"],
+["Downline deposits", "下线充值金额", "Deposit downline"],
+["Downline withdrawals", "下线提款金额", "Pengeluaran downline"],
+["Downline win/loss", "下线净输赢", "Menang/kalah downline"],
+["Downlines", "下线", "Downline"],
+["Downlines of {name}", "{name} 的下线", "Downline {name}"],
+["No downlines", "没有下线", "Tiada downline"],
+["Nobody on the platform lists this player as their referrer.", "平台上没有玩家的推荐人是这个玩家。", "Tiada pemain di platform yang menyenaraikan pemain ini sebagai perujuk mereka."],
+["Player profile", "玩家资料", "Profil pemain"],
+["Players this player referred on the platform (direct downlines only), with what they deposited and withdrew in these dates. Win/loss = deposits − withdrawals.", "这个玩家在平台上推荐的玩家（只算直属下线），以及他们在这段日期的充值和提款。净输赢 = 充值 − 提款。", "Pemain yang dirujuk oleh pemain ini di platform (downline langsung sahaja), dengan deposit dan pengeluaran mereka dalam tarikh ini. Menang/kalah = deposit − pengeluaran."],
+["Registered", "注册时间", "Didaftarkan"],
+["This player isn't linked to the platform yet.", "这个玩家还没有和平台对上。", "Pemain ini belum dipautkan ke platform."]
 ]

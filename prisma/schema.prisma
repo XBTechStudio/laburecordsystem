@@ -193,6 +193,8 @@ model Player {
   /// Registration time and referrer on the platform, when the API gives them.
   registeredAt   DateTime?
   referrer       String?   @db.VarChar(80)
+  /// The platform id (extId) of the player who brought this one in: their upline. Same brand.
+  uplineExtId    String?   @db.VarChar(40)
 
   brand      Brand           @relation(fields: [brandId], references: [id])
   assignedTo User?           @relation("AssignedStaff", fields: [assignedToId], references: [id], onDelete: SetNull)
@@ -211,6 +213,7 @@ model Player {
   @@index([phoneKey])
   @@index([brandId, lastDepositAt])
   @@index([brandId, depositTotal])
+  @@index([brandId, uplineExtId])
 }
 
 // ---------- money in & out ----------

@@ -62,6 +62,8 @@ const json = <T,>(s: string | null | undefined): T | null => {
   }
 };
 
+/** The platform id of the member who referred this one (their upline), if any. */
+const uplineOf = (u: PlatformUser) => (u.referrerId ? String(u.referrerId).slice(0, 40) : null);
 const realPhone = (m?: string) => (m && !m.includes("*") ? m.slice(0, 40) : null);
 const when = (s?: string | null) => (s ? new Date(s) : null);
 
@@ -104,6 +106,7 @@ export async function resolvePlayers(brandId: number, users: PlatformUser[]) {
         ...(hit.name || !i.name ? {} : { name: i.name.slice(0, 120) }),
         ...(i.u.createdDateTime ? { registeredAt: new Date(i.u.createdDateTime) } : {}),
         ...(referrerOf(i.u) ? { referrer: referrerOf(i.u) } : {}),
+        ...(uplineOf(i.u) ? { uplineExtId: uplineOf(i.u) } : {}),
         ...(phone ? { phone, phoneKey: phoneKey(phone) } : {}),
       },
     });
@@ -119,6 +122,7 @@ export async function resolvePlayers(brandId: number, users: PlatformUser[]) {
         extId: String(i.u.id),
         registeredAt: when(i.u.createdDateTime),
         referrer: referrerOf(i.u),
+        uplineExtId: uplineOf(i.u),
         phone,
         phoneKey: phoneKey(phone),
       };
@@ -406,7 +410,7 @@ async function syncPlayers(link: PlatformLink, c: Creds, out: SyncResult) {
     triedEnrich.add(b.id);
     const u = (await getUsers(c, { id: b.extId! })).users?.[0];
     out.pages++;
-    if (u?.createdDateTime) await prisma.player.update({ where: { id: b.id }, data: { registeredAt: new Date(u.createdDateTime), referrer: referrerOf(u) } });
+    if (u?.createdDateTime) await prisma.player.update({ where: { id: b.id }, data: { registeredAt: new Date(u.createdDateTime), referrer: referrerOf(u), uplineExtId: uplineOf(u) } });
   }
   if (done && newest && (!link.playerCursor || newest > link.playerCursor)) await prisma.platformLink.update({ where: { id: link.id }, data: { playerCursor: newest } });
 }
