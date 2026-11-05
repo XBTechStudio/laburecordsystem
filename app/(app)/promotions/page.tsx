@@ -11,7 +11,7 @@ import { dateOnlyStr, dayOf } from "@/lib/dates";
 import { PERIODS, readRule } from "@/lib/promo-rule";
 import Link from "next/link";
 import { RuleEditor } from "./rule-editor";
-import { BoxRuleForm } from "./box-form";
+import { BoxFields } from "./box-fields";
 import { boxText, readBox } from "@/lib/box-rule";
 import { getScope } from "@/lib/scope";
 import { getSettings } from "@/lib/settings";
@@ -304,6 +304,7 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
                                 <input name="note" className="input" defaultValue={p.note ?? ""} />
                               </Field>
                               <CategoryField categories={categories} value={p.category} t={t} />
+                              <BoxFields rule={readBox(p.box)} currency={cur} />
                               <div className="flex justify-end">
                                 <Submit>{t("Save")}</Submit>
                               </div>
@@ -323,9 +324,6 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
                                 <Submit>{t("Save conditions")}</Submit>
                               </div>
                             </ActionForm>
-                          </Dialog>
-                          <Dialog label={t("Lucky Box")} title={t("Lucky Box: {name}", { name: p.name })}>
-                            <BoxRuleForm id={p.id} rule={readBox(p.box)} currency={cur} t={t} />
                           </Dialog>
                           <ActionButton action={togglePromotion} fields={{ id: p.id }}>
                             {p.active ? t("End") : t("Restart")}

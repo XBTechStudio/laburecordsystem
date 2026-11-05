@@ -161,7 +161,7 @@ export default async function LuckyBoxPage({ searchParams }: { searchParams: Pro
       {allPromos.length === 0 ? (
         <Card>
           <Empty title={t("No Lucky Box promotions yet")}>
-            {t("Turn one on under Promotions → Lucky Box, or type a new promotion name under Put into a box.")}
+            {t("Turn one on under Promotions → Edit, or type a new promotion name under Put into a box.")}
           </Empty>
         </Card>
       ) : (

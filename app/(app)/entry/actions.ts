@@ -235,7 +235,7 @@ export async function saveBatch(kind: string, brandId: number, rows: Row[], defa
       revalidatePath("/lucky-box");
       return done(
         t("Saved {n} Lucky Box entries.", { n: parsed.length }) +
-          (newNames.length ? " " + t("New Lucky Box promotions: {names}. Set their release rules under Promotions → Lucky Box.", { names: newNames.join(", ") }) : "") +
+          (newNames.length ? " " + t("New Lucky Box promotions: {names}. Set their release rules under Promotions → Edit.", { names: newNames.join(", ") }) : "") +
           (created ? " " + t("{n} new players added.", { n: created }) : ""),
       );
     }
