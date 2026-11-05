@@ -171,7 +171,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
         {rows.length === 0 ? (
           <Empty title={filtered ? t("Nothing matches these filters") : t("No transactions in this period")} />
         ) : (
-          <TableWrap>
+          <TableWrap stickyHead>
             <table className="tbl">
               <thead>
                 <tr>
