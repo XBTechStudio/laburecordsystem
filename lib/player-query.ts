@@ -61,7 +61,7 @@ export type PlayerFilter = {
   offset: number;
 };
 
-export const PLAYER_SORTS = ["value", "deposit", "count", "avg", "withdraw", "wcount", "net", "recent", "idle", "newest"] as const;
+export const PLAYER_SORTS = ["value", "deposit", "count", "avg", "withdraw", "wcount", "net", "recent", "idle", "newest", "brand", "username", "followup"] as const;
 export type PlayerSort = (typeof PLAYER_SORTS)[number];
 export const playerSort = (v: string | undefined) => PLAYER_SORTS.find((s) => s === v);
 
@@ -101,7 +101,7 @@ export async function queryPlayers(s: TierScoring, f: PlayerFilter): Promise<{ r
 
   const dir = Prisma.raw(f.asc ? "ASC" : "DESC");
   const order = {
-    value: Prisma.sql`score DESC, p.depositTotal DESC`,
+    value: Prisma.sql`score ${dir}, p.depositTotal ${dir}`,
     deposit: Prisma.sql`p.depositTotal ${dir}`,
     count: Prisma.sql`p.depositCount ${dir}, p.depositTotal ${dir}`,
     avg: Prisma.sql`IF(p.depositCount > 0, p.depositTotal / p.depositCount, 0) ${dir}`,
@@ -111,6 +111,10 @@ export async function queryPlayers(s: TierScoring, f: PlayerFilter): Promise<{ r
     recent: Prisma.sql`p.lastDepositAt IS NULL, p.lastDepositAt DESC`,
     idle: Prisma.sql`p.lastDepositAt IS NULL, p.lastDepositAt ASC`,
     newest: Prisma.sql`p.id DESC`,
+    brand: Prisma.sql`(SELECT b.name FROM \`Brand\` b WHERE b.id = p.brandId) ${dir}, score DESC`,
+    username: Prisma.sql`p.username ${dir}`,
+    // Latest contact ever; players never contacted sort as the oldest.
+    followup: Prisma.sql`(SELECT MAX(c.contactedAt) FROM \`ContactLog\` c WHERE c.playerId = p.id) ${dir}, score DESC`,
   }[f.sort ?? "value"];
 
   const [rows, total] = await Promise.all([

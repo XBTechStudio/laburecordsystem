@@ -6,14 +6,16 @@ import { TierChip } from "@/components/tier";
 import { Card, Chip, Empty, Info, PageHeader, Pager, TableWrap } from "@/components/ui";
 import { can, requirePage } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { ago, count, d10, money0 } from "@/lib/format";
-import { queryPlayers, tierName, tierOptions, type PlayerFilter } from "@/lib/player-query";
+import { ago, count, d10, num0, sym } from "@/lib/format";
+import { playerSort, queryPlayers, tierName, tierOptions, type PlayerFilter, type PlayerSort } from "@/lib/player-query";
 import { getScope } from "@/lib/scope";
 import { getSettings } from "@/lib/settings";
 import { getT } from "@/lib/i18n-server";
 import { assignPlayer } from "../cs/actions";
 
 const PER_PAGE = 50;
+/** Column sorts on this page; anything else in ?sort= falls back to most valuable first. */
+const SORTS: PlayerSort[] = ["brand", "username", "value", "deposit", "count", "avg", "idle", "recent", "followup"];
 
 function cutoff(days: number) {
   return new Date(Date.now() - days * 86400_000);
@@ -27,6 +29,9 @@ export default async function ChurnPage({ searchParams }: { searchParams: Promis
   const page = Math.max(1, Number(sp.page) || 1);
   const canLog = can(user, "churn", 2) || can(user, "cs", 2);
   const full = can(user, "churn", 3);
+  const requested = playerSort(sp.sort);
+  const sort: PlayerSort = requested && SORTS.includes(requested) ? requested : "value";
+  const asc = sp.dir === "asc";
 
   // Tabs: one per threshold band, plus everything past the first threshold.
   const bands = days.map((d, i) => ({
@@ -48,7 +53,7 @@ export default async function ChurnPage({ searchParams }: { searchParams: Promis
     refollowBefore: sp.status === "again" && settings.refollowDays > 0 ? cutoff(settings.refollowDays) : undefined,
   };
   const [list, counts, promos] = await Promise.all([
-    queryPlayers(settings.tierScoring, { ...base, idleBefore: tab.idleBefore, idleAfter: tab.idleAfter, sort: "value", limit: PER_PAGE, offset: (page - 1) * PER_PAGE }),
+    queryPlayers(settings.tierScoring, { ...base, idleBefore: tab.idleBefore, idleAfter: tab.idleAfter, sort, asc, limit: PER_PAGE, offset: (page - 1) * PER_PAGE }),
     Promise.all(tabs.map((t) => queryPlayers(settings.tierScoring, { ...base, idleBefore: t.idleBefore, idleAfter: t.idleAfter, limit: 0, offset: 0 }).then((r) => r.total))),
     prisma.promotion.findMany({ where: { brandId: { in: scope.brandIds }, active: true }, select: { id: true, name: true, brandId: true }, orderBy: { name: "asc" } }),
   ]);
@@ -65,6 +70,24 @@ export default async function ChurnPage({ searchParams }: { searchParams: Promis
   const params = Object.fromEntries(Object.entries(sp).filter(([k, v]) => v && k !== "page")) as Record<string, string>;
   const href = (q: Record<string, string>) => `/churn?${new URLSearchParams({ ...params, ...q })}`;
   const multi = !scope.current;
+  // Amounts show without a currency sign; when the listed brands use different currencies, the brand cell says which.
+  const mixedCurrency = new Set(list.rows.map((p) => scope.brandCurrency(p.brandId))).size > 1;
+
+  /** A header that sorts by its column: highest (or A–Z for text) first, a second click the other way. "Last deposit" flips between idle and recent. */
+  const sortHead = (label: string, key: PlayerSort, opts: { flip?: PlayerSort; ascFirst?: boolean } = {}) => {
+    const { flip, ascFirst } = opts;
+    const active = sort === key || (flip != null && sort === flip);
+    const nextAsc = sort === key ? !asc : !!ascFirst;
+    const next: Record<string, string> = flip ? { sort: sort === key ? flip : key } : { sort: key, ...(nextAsc ? { dir: "asc" } : {}) };
+    const rest = Object.fromEntries(Object.entries(params).filter(([k]) => k !== "sort" && k !== "dir"));
+    const arrow = !active ? "↕" : flip ? (sort === key ? "↓" : "↑") : asc ? "↑" : "↓";
+    return (
+      <Link href={`/churn?${new URLSearchParams({ ...rest, ...next })}`} className="inline-flex items-center gap-1 hover:underline">
+        {t(label)}
+        <span className={active ? "" : "opacity-50"}>{arrow}</span>
+      </Link>
+    );
+  };
 
   return (
     <div className="max-w-7xl">
@@ -103,6 +126,8 @@ export default async function ChurnPage({ searchParams }: { searchParams: Promis
       <form action="/churn" className="mb-4 flex flex-wrap gap-2">
         <BrandFilter />
         <input type="hidden" name="band" value={tab.key} />
+        {sort !== "value" && <input type="hidden" name="sort" value={sort} />}
+        {asc && <input type="hidden" name="dir" value="asc" />}
         <AutoSelect name="tier" defaultValue={sp.tier ?? ""} className="input w-auto">
           <option value="">{t("All tiers")}</option>
           {tierOptions(settings.tierScoring).map((x) => (
@@ -129,16 +154,18 @@ export default async function ChurnPage({ searchParams }: { searchParams: Promis
           <Empty title={t("Nobody to follow up here")}>{t("Every player in this group has deposited recently, or no one matches the filters.")}</Empty>
         ) : (
           <TableWrap>
-            <table className="tbl">
+            <table className="tbl tbl-players">
               <thead>
                 <tr>
-                  <th>{t("Player")}</th>
-                  {multi && <th>{t("Brand")}</th>}
-                  <th>{t("Tier")}</th>
-                  <th className="r">{t("Lifetime deposits")}</th>
-                  <th>{t("Last deposit")}</th>
+                  {multi && <th className="sort">{sortHead("Brand", "brand", { ascFirst: true })}</th>}
+                  <th className="sort">{sortHead("Player", "username", { ascFirst: true })}</th>
+                  <th className="sort">{sortHead("Tier", "value")}</th>
+                  <th className="r sort">{sortHead("Total deposits", "deposit")}</th>
+                  <th className="r sort">{sortHead("Deposit times", "count")}</th>
+                  <th className="r sort">{sortHead("Avg deposit", "avg")}</th>
+                  <th className="sort">{sortHead("Last deposit", "idle", { flip: "recent" })}</th>
                   <th>{t("CS")}</th>
-                  <th>{t("Last follow-up")}</th>
+                  <th className="sort">{sortHead("Last follow-up", "followup")}</th>
                   {canLog && <th />}
                 </tr>
               </thead>
@@ -151,24 +178,30 @@ export default async function ChurnPage({ searchParams }: { searchParams: Promis
                   const idle = Math.floor((nowMs - (p.lastDepositAt?.getTime() ?? 0)) / 86400_000);
                   return (
                     <tr key={p.id}>
-                      <td>
-                        <Link href={`/players/${p.id}`} className="font-medium hover:underline">
+                      {multi && (
+                        <td className="font-semibold">
+                          {scope.brandName(p.brandId)}
+                          {mixedCurrency && <div className="text-xs font-normal text-muted">{sym(scope.brandCurrency(p.brandId))}</div>}
+                        </td>
+                      )}
+                      <td className="whitespace-nowrap">
+                        <Link href={`/players/${p.id}`} className="font-semibold hover:underline">
                           {p.username}
                         </Link>
-                        {p.phone && <div className="text-xs text-muted">{p.phone}</div>}
+                        {(p.name || p.phone) && (
+                          <div className="max-w-52 truncate text-xs text-muted" title={[p.name, p.phone].filter(Boolean).join(" · ")}>
+                            {[p.name, p.phone].filter(Boolean).join(" · ")}
+                          </div>
+                        )}
                       </td>
-                      {multi && <td className="text-ink-2">{scope.brandName(p.brandId)}</td>}
                       <td>
                         <TierChip name={tier.name} rank={tier.rank} />
                       </td>
-                      <td className="r">
-                        <div>
-                          {money0(p.depositTotal, scope.brandCurrency(p.brandId))} <span className="text-xs text-muted">×{p.depositCount}</span>
-                        </div>
-                        {p.depositCount > 0 && <div className="text-xs text-muted">{t("avg {amount}", { amount: money0(p.depositTotal / p.depositCount, scope.brandCurrency(p.brandId)) })}</div>}
-                      </td>
+                      <td className="r big dep">{num0(p.depositTotal)}</td>
+                      <td className="r mid">{count(p.depositCount)}</td>
+                      <td className="r mid good">{p.depositCount ? num0(p.depositTotal / p.depositCount) : "–"}</td>
                       <td className="whitespace-nowrap">
-                        <span className={idle >= days[days.length - 1] ? "font-medium text-critical-ink" : ""}>{t("{n} days ago", { n: idle })}</span>
+                        <span className={`font-semibold ${idle >= days[days.length - 1] ? "text-critical-ink" : ""}`}>{t("{n} days ago", { n: idle })}</span>
                         <div className="text-xs text-muted">{d10(p.lastDepositAt)}</div>
                       </td>
                       <td className="text-ink-2">
