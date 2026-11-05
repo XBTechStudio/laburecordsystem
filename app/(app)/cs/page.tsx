@@ -15,7 +15,7 @@ import type { T } from "@/lib/i18n";
 import { getT } from "@/lib/i18n-server";
 import { deleteContact, logContact } from "./actions";
 
-type Row = { id: number; staffId: number; playerId: number; channel: string; replied: number; bonus: unknown; brandId: number; dep: unknown; d: string; offered: number; claimed: unknown };
+type Row = { id: number; staffId: number; playerId: number; channel: string; replied: number; bonus: unknown; brandId: number; dep: unknown; d: string; offered: number; claimed: unknown; promotionId: number | null };
 
 /** offered/claimed: players offered a promotion, and those who then claimed it within the return window. */
 type Agg = { contacts: number; players: Set<number>; replied: number; returned: Set<number>; deposits: number; bonus: number; offered: Set<number>; claimed: Set<number> };
@@ -130,7 +130,7 @@ async function Performance({
 }) {
   if (!brandIds.length) return null;
   const rows = await prisma.$queryRaw<Row[]>`
-    SELECT c.id, c.staffId, c.playerId, c.channel, c.replied, c.bonus, p.brandId,
+    SELECT c.id, c.staffId, c.playerId, c.channel, c.replied, c.bonus, c.promotionId, p.brandId,
       DATE_FORMAT(DATE_ADD(c.contactedAt, INTERVAL 8 HOUR), '%Y-%m-%d') AS d,
       c.promotionId IS NOT NULL AS offered,
       EXISTS (SELECT 1 FROM \`PromoClaim\` k
@@ -146,11 +146,21 @@ async function Performance({
       </Card>
     );
 
-  const users = new Map((await prisma.user.findMany({ select: { id: true, name: true } })).map((u) => [u.id, u.name]));
+  const ids = [...new Set(rows.map((r) => r.promotionId).filter((x): x is number => x != null))];
+  const [userList, promoList] = await Promise.all([
+    prisma.user.findMany({ select: { id: true, name: true } }),
+    ids.length ? prisma.promotion.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }) : [],
+  ]);
+  const users = new Map(userList.map((u) => [u.id, u.name]));
+  // Offers are grouped by name, so the same promotion in several brands is one row.
+  const NONE = "\u0000none";
+  const offerOf = (r: Row) => (r.promotionId != null ? (promoList.find((x) => x.id === r.promotionId)?.name ?? `#${r.promotionId}`) : NONE);
   const byStaff = new Map<number, Agg>();
   const byChannel = new Map<string, Agg>();
   const byBrand = new Map<number, Agg>();
+  const byOffer = new Map<string, Agg>();
   const daily = new Map<string, number>();
+  const offerDaily = new Map<string, number>();
   // Deposits are counted once per staff + player (their best window), so contacting someone twice doesn't double it.
   const best = new Map<string, number>();
   const add = (a: Agg, r: Row, dep: number, bonus: number) => {
@@ -169,16 +179,22 @@ async function Performance({
     byStaff.set(r.staffId, add(byStaff.get(r.staffId) ?? agg(), r, dep, bonus));
     byChannel.set(r.channel, add(byChannel.get(r.channel) ?? agg(), r, dep, bonus));
     byBrand.set(r.brandId, add(byBrand.get(r.brandId) ?? agg(), r, dep, bonus));
-    for (const k of [`s${r.staffId}|${r.playerId}`, `c${r.channel}|${r.playerId}`, `b${r.brandId}|${r.playerId}`]) best.set(k, Math.max(best.get(k) ?? 0, dep));
+    const offer = offerOf(r);
+    byOffer.set(offer, add(byOffer.get(offer) ?? agg(), r, dep, bonus));
+    for (const k of [`s${r.staffId}|${r.playerId}`, `c${r.channel}|${r.playerId}`, `b${r.brandId}|${r.playerId}`, `o${offer}|${r.playerId}`]) best.set(k, Math.max(best.get(k) ?? 0, dep));
     daily.set(`${r.staffId}|${r.d}`, (daily.get(`${r.staffId}|${r.d}`) ?? 0) + 1);
+    offerDaily.set(`${offer}|${r.d}`, (offerDaily.get(`${offer}|${r.d}`) ?? 0) + 1);
   }
   for (const [k, v] of best) {
     const [key] = k.slice(1).split("|");
-    const a = k[0] === "s" ? byStaff.get(Number(key)) : k[0] === "b" ? byBrand.get(Number(key)) : byChannel.get(key);
+    const a = k[0] === "s" ? byStaff.get(Number(key)) : k[0] === "b" ? byBrand.get(Number(key)) : k[0] === "o" ? byOffer.get(key) : byChannel.get(key);
     if (a) a.deposits += v;
   }
 
   const staffRows = [...byStaff.entries()].sort((a, b) => b[1].returned.size - a[1].returned.size);
+  // Offers by how often they were used, "no offer" last.
+  const offerRows = [...byOffer.entries()].sort((a, b) => (a[0] === NONE ? 1 : 0) - (b[0] === NONE ? 1 : 0) || b[1].contacts - a[1].contacts);
+  const offerName = (k: string) => (k === NONE ? t("No offer") : k);
   const days = allDaysOf(range).slice(-31);
   const table = (title: string, entries: [string, Agg][], first: string) => (
     <Card flush title={title}>
@@ -205,7 +221,7 @@ async function Performance({
           <tbody>
             {entries.map(([name, a]) => (
               <tr key={name}>
-                <td className="font-medium">{t(name)}</td>
+                <td className="font-medium">{name}</td>
                 <td className="r">{count(a.contacts)}</td>
                 <td className="r">{count(a.players.size)}</td>
                 <td className="r">{pct(ratio(a.replied, a.contacts), 0)}</td>
@@ -234,8 +250,9 @@ async function Performance({
   return (
     <div className="space-y-5">
       {table(t("By CS"), staffRows.map(([id, a]) => [users.get(id) ?? `#${id}`, a]), t("Staff"))}
+      {table(t("By offer"), offerRows.map(([k, a]) => [offerName(k), a]), t("Offer"))}
       {byBrand.size > 1 && table(t("By brand"), [...byBrand.entries()].sort((a, b) => b[1].players.size - a[1].players.size).map(([id, a]) => [brandName(id), a]), t("Brand"))}
-      {table(t("By channel"), [...byChannel.entries()].sort((a, b) => b[1].contacts - a[1].contacts), t("Channel"))}
+      {table(t("By channel"), [...byChannel.entries()].sort((a, b) => b[1].contacts - a[1].contacts).map(([k, a]) => [t(k), a]), t("Channel"))}
       <Card flush title={t("Contacts per day")} note={days.length < allDaysOf(range).length ? t("Last 31 days of the period") : undefined}>
         <TableWrap>
           <table className="tbl">
@@ -256,6 +273,39 @@ async function Performance({
                   <td className="font-medium whitespace-nowrap">{users.get(id)}</td>
                   {days.map((d) => {
                     const v = daily.get(`${id}|${d}`) ?? 0;
+                    return (
+                      <td key={d} className={`text-center ${v ? "" : "text-muted"}`}>
+                        {v || "·"}
+                      </td>
+                    );
+                  })}
+                  <td className="r font-medium">{a.contacts}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </TableWrap>
+      </Card>
+      <Card flush title={t("Offers used per day")} note={days.length < allDaysOf(range).length ? t("Last 31 days of the period") : undefined}>
+        <TableWrap>
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>{t("Offer")}</th>
+                {days.map((d) => (
+                  <th key={d} className="text-center">
+                    {d.slice(8)}
+                  </th>
+                ))}
+                <th className="r">{t("Total")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {offerRows.map(([k, a]) => (
+                <tr key={k}>
+                  <td className={`font-medium whitespace-nowrap ${k === NONE ? "text-muted" : ""}`}>{offerName(k)}</td>
+                  {days.map((d) => {
+                    const v = offerDaily.get(`${k}|${d}`) ?? 0;
                     return (
                       <td key={d} className={`text-center ${v ? "" : "text-muted"}`}>
                         {v || "·"}
