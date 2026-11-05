@@ -247,7 +247,8 @@ async function saveTxns(link: PlatformLink & { brand: { name: string; currency: 
 const swept = new Set<number>();
 /** How far back undone transactions are looked for: every hour, and on the first run after a start. */
 const UNDONE_LOOKBACK = 7 * 24 * HOUR;
-const UNDONE_FIRST_LOOKBACK = 35 * 24 * HOUR;
+/** The platform refuses date ranges over 31 days. */
+const UNDONE_FIRST_LOOKBACK = 30 * 24 * HOUR;
 
 /**
  * Staff sometimes reject or cancel a deposit or withdrawal after it completed, e.g. to split a manual top-up of 100 into
@@ -337,7 +338,8 @@ async function syncTxns(link: PlatformLink & { brand: { name: string; currency: 
     cursor = to;
     from = to;
   }
-  if (deep && !out.more && link.syncTxns) await dropUndone(link, c, out, now);
+  // A failure here must not stop the sync: the rest of the run (and the cursor) is unaffected.
+  if (deep && !out.more && link.syncTxns) await dropUndone(link, c, out, now).catch((e) => console.error(`platform sync: undone check for brand ${link.brandId} failed`, e));
   // The cursor moves past each fully read window, so a long catch-up continues where it stopped.
   const data: Prisma.PlatformLinkUpdateInput = { channelMap: map };
   if (cursor && (!link.txnCursor || cursor > link.txnCursor)) data.txnCursor = cursor;
