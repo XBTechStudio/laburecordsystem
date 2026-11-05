@@ -6,7 +6,7 @@ import { parseRange } from "@/lib/dates";
 import { prisma } from "@/lib/db";
 import { count, money0, pct } from "@/lib/format";
 import { emptyStat, emptyTrack, judge, promoStats, trackStats } from "@/lib/promo-stats";
-import { dateOnlyStr } from "@/lib/dates";
+import { dateOnlyStr, dayOf } from "@/lib/dates";
 import { PERIODS, readRule, tierText } from "@/lib/promo-rule";
 import Link from "next/link";
 import { RuleEditor } from "./rule-editor";
@@ -46,7 +46,9 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
   const [scope, settings, t] = await Promise.all([getScope(user), getSettings(), getT()]);
   const range = parseRange(sp, "month");
   const manage = can(user, "promotions", 3);
+  // Default: running promotions with claims in the dates, plus ones set up to be tracked, Lucky Box ones and new ones.
   const showEnded = sp.ended === "1";
+  const claimedOnly = !sp.ended;
   const cat = sp.cat ?? "";
   const ids = scope.brandIds;
 
@@ -67,6 +69,7 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
       const j = judge(s, settings.promoAdjustPercent);
       return { p, s, net: j.net, cost: j.cost, verdict: VERDICT[j.verdict] };
     })
+    .filter(({ p, s }) => !claimedOnly || s.claims > 0 || readRule(p.rule) || readBox(p.box) || dayOf(p.createdAt) >= range.from)
     .sort((a, b) => b.s.given - a.s.given);
   const totals = rows.reduce(
     (a, r) => {
@@ -129,7 +132,8 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
               <input key={k} type="hidden" name={k} value={v} />
             ))}
           <AutoSelect name="ended" defaultValue={showEnded ? "1" : ""} className="input h-8 w-auto">
-            <option value="">{t("Running promotions")}</option>
+            <option value="">{t("Claimed in these dates")}</option>
+            <option value="running">{t("Running promotions")}</option>
             <option value="1">{t("Include ended ones")}</option>
           </AutoSelect>
           <AutoSelect name="cat" defaultValue={cat} className="input h-8 w-auto">
@@ -224,7 +228,11 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
 
       <Card flush>
         {rows.length === 0 ? (
-          <Empty title={t("No promotions yet")}>{t("Promotions are created here, or automatically when claims are entered or imported.")}</Empty>
+          all.length && claimedOnly ? (
+            <Empty title={t("No claims in these dates")}>{t("Pick “Running promotions” above to see every promotion.")}</Empty>
+          ) : (
+            <Empty title={t("No promotions yet")}>{t("Promotions are created here, or automatically when claims are entered or imported.")}</Empty>
+          )
         ) : (
           <TableWrap>
             <table className="tbl">
