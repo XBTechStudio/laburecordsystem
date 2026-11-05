@@ -37,6 +37,8 @@
 ["Return window (days)","回流认定天数","Jangka kembali (hari)"],
 ["Return window must be at least 1 day.","回流认定天数至少 1 天。","Jangka kembali minimal 1 hari."],
 ["Returned","回流人数","Kembali"],
+["Cleared, given again","已清除、已补发","Dikosongkan, diberi semula"],
+["The player cleared their balance right after this bonus and was given the same bonus again, so only that one counts.","玩家领取这笔优惠后马上清除了余额，之后又补发了同一个优惠，所以只计算补发的那一笔。","Pemain mengosongkan baki sejurus selepas bonus ini dan diberi bonus yang sama semula, jadi hanya yang itu dikira."],
 ["Claimed offer","领取该优惠","Tuntut tawaran"],
 ["Came back to deposit","回来充值","Kembali deposit"],
 ["Players who claimed the offer CS gave them, within the return window, of those given an offer","回流期内领取了客服所给优惠的人数 / 有给优惠的人数","Pemain yang menuntut tawaran CS dalam tempoh kembali, daripada yang diberi tawaran"],

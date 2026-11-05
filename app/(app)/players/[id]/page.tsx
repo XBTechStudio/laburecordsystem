@@ -461,10 +461,17 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
                 <table className="tbl">
                   <tbody>
                     {claims.map((c) => (
-                      <tr key={c.id}>
+                      <tr key={c.id} className={c.voidedAt ? "text-muted" : ""}>
                         <td className="whitespace-nowrap text-ink-2">{dt(c.claimedAt)}</td>
-                        <td>{c.promotion.name}</td>
-                        <td className="r">{money(c.amount, cur)}</td>
+                        <td>
+                          {c.promotion.name}
+                          {c.voidedAt && (
+                            <span className="ml-1.5" title={t("The player cleared their balance right after this bonus and was given the same bonus again, so only that one counts.")}>
+                              <Chip>{t("Cleared, given again")}</Chip>
+                            </span>
+                          )}
+                        </td>
+                        <td className={`r ${c.voidedAt ? "line-through" : ""}`}>{money(c.amount, cur)}</td>
                       </tr>
                     ))}
                   </tbody>

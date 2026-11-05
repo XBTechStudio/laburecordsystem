@@ -414,6 +414,10 @@ model PromoClaim {
   /// The platform's transaction id when the claim came from the platform API.
   ref         String?  @db.VarChar(80)
   createdAt   DateTime @default(now())
+  /// Set when the player cleared this bonus away by mistake (Player Clear Balance) and was given the same bonus again:
+  /// the bonus was taken back, so this claim no longer counts; replacedById is the claim given in its place (lib/promo-voids.ts).
+  voidedAt     DateTime?
+  replacedById Int?
 
   boxRelease BoxEntry?
 
@@ -779,11 +783,13 @@ model PlayerDay {
 
 /// Credits the platform pays outside its promotions (rebates, commission), from the platform API. Like a deposit or a new
 /// bonus, one ends the promotion a player was playing under: later withdrawals no longer count for it (lib/promo-stats.ts).
+/// Also the platform's forfeits (balance cleared, kind FORFEITED, amount as a positive number), used to find bonuses
+/// cleared by mistake and given again (lib/promo-voids.ts); those don't end a promotion.
 model PlayerCredit {
   id       Int      @id @default(autoincrement())
   brandId  Int
   playerId Int
-  /// The platform's transaction type: REBATE or COMMISSION.
+  /// The platform's transaction type: REBATE, COMMISSION or FORFEITED.
   kind     String   @db.VarChar(20)
   amount   Decimal  @db.Decimal(14, 2)
   at       DateTime

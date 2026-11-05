@@ -21,6 +21,7 @@ import {
 } from "@/lib/platform-api";
 import { refreshPlayerStats } from "@/lib/players";
 import { linkClaims, safely, trackPlayers } from "@/lib/promo-engine";
+import { voidReissued } from "@/lib/promo-voids";
 import { open } from "@/lib/secret-box";
 
 // Reads each connected brand's platform on a timer: completed deposits and withdrawals, bonus claims,
@@ -39,6 +40,9 @@ const LOOKBACK = 2 * HOUR;
 const DEEP_LOOKBACK = 48 * HOUR;
 /** Credits paid outside the platform's promotions; each ends the promotion the player was under (see PlayerCredit). */
 export const CREDITS = ["REBATE", "COMMISSION"];
+/** Kept in PlayerCredit as well: cleared balances, to find bonuses cleared by mistake and given again (lib/promo-voids.ts). */
+const KEPT = [...CREDITS, "FORFEITED"];
+const DAY = 24 * HOUR;
 
 export type ChannelMap = Record<string, { id: number; label: string }>;
 export type SyncResult = { txns: number; claims: number; players: number; betDays: number; pages: number; more: boolean; /** Synced transactions removed because the platform rejected them afterwards. */ undone: number };
@@ -154,7 +158,7 @@ async function saveTxns(link: PlatformLink & { brand: { name: string; currency: 
   const brandId = link.brandId;
   const money = rows.filter((r) => (r.type === "DEPOSIT" || r.type === "WITHDRAW") && link.syncTxns);
   const bonus = rows.filter((r) => r.type === "BONUS" && link.syncClaims);
-  const credits = rows.filter((r) => CREDITS.includes(r.type) && link.syncClaims);
+  const credits = rows.filter((r) => KEPT.includes(r.type) && link.syncClaims);
   if (!money.length && !bonus.length && !credits.length) return { txns: 0, claims: 0, players: 0 };
   const players = await resolvePlayers(
     brandId,
@@ -251,11 +255,20 @@ async function saveTxns(link: PlatformLink & { brand: { name: string; currency: 
     }
     if (data.length) await prisma.playerCredit.createMany({ data, skipDuplicates: true });
   }
+  // A bonus or a cleared balance just read may complete a "cleared by mistake, given again" pair.
+  const touched = [...bonus, ...credits.filter((r) => r.type === "FORFEITED")];
+  const ids = [...new Set(touched.map((r) => r.user && players.ids.get(String(r.user.id))).filter((x): x is number => !!x))];
+  if (ids.length) {
+    const since = new Date(Math.min(...touched.map((r) => new Date(r.createdDateTime).getTime())) - DAY);
+    await safely("reissued bonuses", () => voidReissued(brandId, since, ids));
+  }
   return { txns, claims, players: players.created };
 }
 
 /** Brands whose undone transactions have been looked for since the server started (the first look reaches further back). */
 const swept = new Set<number>();
+/** Brands checked for bonuses cleared by mistake since the server started. */
+const voidSwept = new Set<number>();
 /** How far back undone transactions are looked for every hour. Staff undo within minutes to an hour (they reject, then re-enter
  *  the split amounts), so six hours is plenty; the first run after a start (at least weekly) reaches back further. */
 const UNDONE_LOOKBACK = 6 * HOUR;
@@ -310,8 +323,8 @@ async function syncTxns(link: PlatformLink & { brand: { name: string; currency: 
   let from = link.txnCursor ? new Date(link.txnCursor.getTime() - (catchingUp ? 0 : deep ? DEEP_LOOKBACK : LOOKBACK)) : link.startAt;
   if (from < link.startAt) from = link.startAt;
   let cursor = link.txnCursor;
-  // Only the types we keep: the platform also lists forfeits and other rows, often most of a day's pages.
-  const types = [...(link.syncTxns ? ["DEPOSIT", "WITHDRAW"] : []), ...(link.syncClaims ? ["BONUS", ...CREDITS] : [])];
+  // Only the types we keep. Forfeits (cleared balances) are many, but needed to find bonuses cleared by mistake.
+  const types = [...(link.syncTxns ? ["DEPOSIT", "WITHDRAW"] : []), ...(link.syncClaims ? ["BONUS", ...KEPT] : [])];
   const read = (from: Date, to: Date, type: string, pageIndex: number) => {
     out.pages++;
     return getTransactions(c, { sDate: platformTime(from, link.timeZone), eDate: platformTime(to, link.timeZone), pageIndex, type });
@@ -349,6 +362,11 @@ async function syncTxns(link: PlatformLink & { brand: { name: string; currency: 
     out.players += r.players;
     cursor = to;
     from = to;
+  }
+  // Once after each start, the whole recent history is checked for bonuses cleared by mistake and given again.
+  if (!out.more && link.syncClaims && !voidSwept.has(link.id)) {
+    voidSwept.add(link.id);
+    await safely("reissued bonuses", () => voidReissued(link.brandId, new Date(now.getTime() - 120 * DAY)));
   }
   // A failure here must not stop the sync: the rest of the run (and the cursor) is unaffected.
   if (deep && !out.more && link.syncTxns) await dropUndone(link, c, out, now).catch((e) => console.error(`platform sync: undone check for brand ${link.brandId} failed`, e));

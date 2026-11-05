@@ -37,14 +37,14 @@ export async function promoStats(brandIds: number[], range: Range, windowDays: n
     prisma.$queryRaw<{ pid: number; claims: bigint; claimers: bigint; given: unknown }[]>`
       SELECT c.promotionId AS pid, COUNT(*) AS claims, COUNT(DISTINCT c.playerId) AS claimers, SUM(c.amount) AS given
       FROM \`PromoClaim\` c JOIN \`Promotion\` p ON p.id = c.promotionId
-      WHERE p.brandId IN (${list}) AND c.claimedAt >= ${t0} AND c.claimedAt < ${t1}
+      WHERE p.brandId IN (${list}) AND c.claimedAt >= ${t0} AND c.claimedAt < ${t1} AND c.voidedAt IS NULL
       GROUP BY c.promotionId`,
     prisma.$queryRaw<{ pid: number; type: string; amt: unknown; cnt: bigint }[]>`
       SELECT w.pid, t.type, SUM(t.amount) AS amt, COUNT(*) AS cnt
       FROM (
         SELECT c.promotionId AS pid, c.playerId, MIN(c.claimedAt) AS f, MAX(c.claimedAt) AS l
         FROM \`PromoClaim\` c JOIN \`Promotion\` p ON p.id = c.promotionId
-        WHERE p.brandId IN (${list}) AND c.claimedAt >= ${t0} AND c.claimedAt < ${t1}
+        WHERE p.brandId IN (${list}) AND c.claimedAt >= ${t0} AND c.claimedAt < ${t1} AND c.voidedAt IS NULL
         GROUP BY c.promotionId, c.playerId
       ) w JOIN \`Txn\` t ON t.playerId = w.playerId AND t.txnAt >= w.f AND t.txnAt < DATE_ADD(w.l, INTERVAL ${windowDays} DAY)
       GROUP BY w.pid, t.type`,
@@ -90,13 +90,13 @@ function runsSql(brandList: Prisma.Sql, t0: Date, t1: Date) {
       SELECT playerId, at, 2 AS ord, id AS wid, NULL AS pid, NULL AS cid, amount, 0 AS starts FROM wd
       UNION ALL
       SELECT c.playerId, c.claimedAt, 1, NULL, c.promotionId, c.id, NULL, 1 FROM \`PromoClaim\` c JOIN who USING (playerId)
-      WHERE c.claimedAt >= ${m0} AND c.claimedAt < ${t1}
+      WHERE c.claimedAt >= ${m0} AND c.claimedAt < ${t1} AND c.voidedAt IS NULL
       UNION ALL
       SELECT t.playerId, t.txnAt, 0, NULL, NULL, NULL, NULL, 1 FROM \`Txn\` t JOIN who USING (playerId)
       WHERE t.type = 'DEPOSIT' AND t.txnAt >= ${m0} AND t.txnAt < ${t1}
       UNION ALL
       SELECT x.playerId, x.at, 0, NULL, NULL, NULL, NULL, 1 FROM \`PlayerCredit\` x JOIN who USING (playerId)
-      WHERE x.at >= ${m0} AND x.at < ${t1}
+      WHERE x.at >= ${m0} AND x.at < ${t1} AND x.kind IN ('REBATE', 'COMMISSION')
     ),
     runs AS (SELECT ev.*, SUM(starts) OVER (PARTITION BY playerId ORDER BY at, ord ROWS UNBOUNDED PRECEDING) AS grp FROM ev),
     owned AS (SELECT runs.*, MAX(pid) OVER (PARTITION BY playerId, grp) AS owner, MAX(cid) OVER (PARTITION BY playerId, grp) AS claimId FROM runs)`;

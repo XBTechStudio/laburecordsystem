@@ -52,7 +52,7 @@ export async function dailyRows(brandIds: number[], r: Range): Promise<DayRow[]>
     prisma.$queryRaw<{ brandId: number; d: Date; amt: unknown }[]>`
       SELECT p.brandId, DATE(DATE_ADD(c.claimedAt, INTERVAL 8 HOUR)) AS d, SUM(c.amount) AS amt
       FROM \`PromoClaim\` c JOIN \`Promotion\` p ON p.id = c.promotionId
-      WHERE p.brandId IN (${ids}) AND c.claimedAt >= ${t0} AND c.claimedAt < ${t1}
+      WHERE p.brandId IN (${ids}) AND c.claimedAt >= ${t0} AND c.claimedAt < ${t1} AND c.voidedAt IS NULL
       GROUP BY p.brandId, d`,
     prisma.$queryRaw<{ brandId: number; d: Date; kind: string; amt: unknown }[]>`
       SELECT e.brandId, e.date AS d, c.kind, SUM(e.amount) AS amt

@@ -134,7 +134,7 @@ async function Performance({
       DATE_FORMAT(DATE_ADD(c.contactedAt, INTERVAL 8 HOUR), '%Y-%m-%d') AS d,
       c.promotionId IS NOT NULL AS offered,
       EXISTS (SELECT 1 FROM \`PromoClaim\` k
-        WHERE k.playerId = c.playerId AND k.promotionId = c.promotionId AND k.claimedAt > c.contactedAt AND k.claimedAt <= DATE_ADD(c.contactedAt, INTERVAL ${recallDays} DAY)) AS claimed,
+        WHERE k.playerId = c.playerId AND k.promotionId = c.promotionId AND k.voidedAt IS NULL AND k.claimedAt > c.contactedAt AND k.claimedAt <= DATE_ADD(c.contactedAt, INTERVAL ${recallDays} DAY)) AS claimed,
       (SELECT COALESCE(SUM(t.amount), 0) FROM \`Txn\` t
         WHERE t.playerId = c.playerId AND t.type = 'DEPOSIT' AND t.amount >= ${recallMin} AND t.txnAt > c.contactedAt AND t.txnAt <= DATE_ADD(c.contactedAt, INTERVAL ${recallDays} DAY)) AS dep
     FROM \`ContactLog\` c JOIN \`Player\` p ON p.id = c.playerId
@@ -314,7 +314,7 @@ async function Log({
         FROM \`ContactLog\` c
         LEFT JOIN \`PromoClaim\` k ON k.id = (
           SELECT k2.id FROM \`PromoClaim\` k2
-          WHERE k2.playerId = c.playerId AND k2.promotionId = c.promotionId AND k2.claimedAt > c.contactedAt AND k2.claimedAt <= DATE_ADD(c.contactedAt, INTERVAL ${recallDays} DAY)
+          WHERE k2.playerId = c.playerId AND k2.promotionId = c.promotionId AND k2.voidedAt IS NULL AND k2.claimedAt > c.contactedAt AND k2.claimedAt <= DATE_ADD(c.contactedAt, INTERVAL ${recallDays} DAY)
           ORDER BY k2.claimedAt LIMIT 1)
         LEFT JOIN \`Txn\` d ON d.id = (
           SELECT d2.id FROM \`Txn\` d2
