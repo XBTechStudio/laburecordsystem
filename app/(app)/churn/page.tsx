@@ -12,6 +12,7 @@ import { getScope } from "@/lib/scope";
 import { getSettings } from "@/lib/settings";
 import { getT } from "@/lib/i18n-server";
 import { assignPlayer } from "../cs/actions";
+import { BrandTag } from "@/components/brand-tag";
 
 const PER_PAGE = 50;
 /** Column sorts on this page; anything else in ?sort= falls back to most valuable first. */
@@ -180,7 +181,7 @@ export default async function ChurnPage({ searchParams }: { searchParams: Promis
                     <tr key={p.id}>
                       {multi && (
                         <td className="font-semibold">
-                          {scope.brandName(p.brandId)}
+                          <BrandTag id={p.brandId} />
                           {mixedCurrency && <div className="text-xs font-normal text-muted">{sym(scope.brandCurrency(p.brandId))}</div>}
                         </td>
                       )}

@@ -16,6 +16,7 @@ import { getScope } from "@/lib/scope";
 import { getSettings } from "@/lib/settings";
 import { loadLists, saveBatch } from "./actions";
 import { EditCell, payTo, TxnFields } from "./edit-cell";
+import { BrandTag } from "@/components/brand-tag";
 
 // Each form has its own menu item under Data (promotion claims come from the platform or Excel import instead).
 const PAGES = {
@@ -257,7 +258,7 @@ async function Recent({
         <tbody>
           {rows.map((tx) => (
             <tr key={tx.id}>
-              <td className="whitespace-nowrap text-ink-2">{brandName(tx.brandId)}</td>
+              <td className="whitespace-nowrap"><BrandTag id={tx.brandId} /></td>
               <td className="font-medium">
                 <Link className="hover:underline" href={`/players/${tx.playerId}`}>
                   {tx.player.username}
@@ -309,7 +310,7 @@ async function Recent({
         <tbody>
           {rows.map((b) => (
             <tr key={b.id}>
-              <td className="whitespace-nowrap text-ink-2">{brandName(b.brandId)}</td>
+              <td className="whitespace-nowrap"><BrandTag id={b.brandId} /></td>
               <td className="font-medium">
                 <Link className="hover:underline" href={`/players/${b.playerId}`}>
                   {b.player.username}
@@ -365,7 +366,7 @@ async function Recent({
         <tbody>
           {rows.map((p) => (
             <tr key={p.id}>
-              <td className="whitespace-nowrap text-ink-2">{brandName(p.brandId)}</td>
+              <td className="whitespace-nowrap"><BrandTag id={p.brandId} /></td>
               <td className="font-medium">
                 <Link className="hover:underline" href={`/players/${p.id}`}>
                   {p.username}

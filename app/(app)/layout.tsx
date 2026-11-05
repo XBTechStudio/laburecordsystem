@@ -44,6 +44,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       if (m === "promotions" && can(user, m))
         return [
           { href: mod.href, label: t("All promotions") },
+          { href: `${mod.href}/tracked`, label: t("Tracked promotions") },
           ...settings.promoCategories.map((c) => ({ href: `${mod.href}?cat=${encodeURIComponent(c)}`, label: c })),
         ];
       if (can(user, m)) return [{ href: mod.href, label }];

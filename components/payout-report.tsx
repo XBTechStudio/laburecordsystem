@@ -7,6 +7,7 @@ import { prisma } from "@/lib/db";
 import { count, dt, money, money0, n } from "@/lib/format";
 import { getT } from "@/lib/i18n-server";
 import { getScope } from "@/lib/scope";
+import { BrandTag } from "@/components/brand-tag";
 
 const MAX_ROWS = 300;
 
@@ -175,7 +176,7 @@ export async function PayoutReport({
                         .sort((a, b) => b[1].amount * scope.rate(Number(b[0])) - a[1].amount * scope.rate(Number(a[0])))
                         .map(([id, s]) => (
                           <tr key={id}>
-                            <td>{scope.brandName(Number(id))}</td>
+                            <td><BrandTag id={Number(id)} /></td>
                             <td className="r">{count(s.players.size)}</td>
                             <td className="r">{count(s.payouts)}</td>
                             <td className="r">{money0(s.amount, scope.brandCurrency(Number(id)))}</td>
@@ -193,8 +194,8 @@ export async function PayoutReport({
               <table className="tbl">
                 <thead>
                   <tr>
-                    <th>{t("Player")}</th>
                     {multi && <th>{t("Brand")}</th>}
+                    <th>{t("Player")}</th>
                     <th>{t("CS")}</th>
                     <th className="r">{t("Times paid")}</th>
                     <th className="r">{t("Total")}</th>
@@ -208,13 +209,13 @@ export async function PayoutReport({
                     const cur = scope.brandCurrency(p.brandId);
                     return (
                       <tr key={id}>
+                        {multi && <td><BrandTag id={p.brandId} /></td>}
                         <td>
                           <Link className="link font-medium" href={`/players/${id}`}>
                             {pl?.username ?? `#${id}`}
                           </Link>
                           {pl?.name && <div className="text-xs text-muted">{pl.name}</div>}
                         </td>
-                        {multi && <td className="text-ink-2">{scope.brandName(p.brandId)}</td>}
                         <td className="text-ink-2">{pl?.assignedTo?.name ?? "–"}</td>
                         <td className="r">{count(p.payouts)}</td>
                         <td className="r font-medium">{money(p.amount, cur)}</td>

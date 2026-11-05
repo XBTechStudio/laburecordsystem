@@ -8,10 +8,11 @@ import type { T } from "@/lib/i18n";
 import { getT } from "@/lib/i18n-server";
 import { getSettings } from "@/lib/settings";
 import { createBrand, toggleBrand, updateBrand } from "./actions";
+import { BrandTag } from "@/components/brand-tag";
 
 const CURRENCIES = ["SGD", "MYR", "AUD", "USDT", "USD", "THB", "IDR", "PHP", "VND", "CNY"];
 
-function BrandFields({ b, base, t }: { b?: { id: number; name: string; currency: string; fxRate: { toString(): string } }; base: string; t: T }) {
+function BrandFields({ b, base, t }: { b?: { id: number; name: string; currency: string; fxRate: { toString(): string }; color: string | null }; base: string; t: T }) {
   return (
     <div className="space-y-3">
       {b && <input type="hidden" name="id" value={b.id} />}
@@ -26,6 +27,15 @@ function BrandFields({ b, base, t }: { b?: { id: number; name: string; currency:
           <input name="fxRate" className="input" inputMode="decimal" defaultValue={b ? n(b.fxRate) : 1} required />
         </Field>
       </div>
+      <Field label={t("Colour")} hint={t("The brand's name is shown in this colour on every page.")}>
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="useColor" defaultChecked={!!b?.color} className="h-4 w-4 accent-[var(--brand)]" />
+            {t("Use a colour")}
+          </label>
+          <input type="color" name="color" defaultValue={b?.color ?? "#2a78d6"} className="h-9 w-16 cursor-pointer rounded-md border border-line bg-surface p-1" />
+        </div>
+      </Field>
       <datalist id="currencies">
         {CURRENCIES.map((c) => (
           <option key={c} value={c} />
@@ -88,7 +98,9 @@ export default async function BrandsPage() {
               <tbody>
                 {brands.map((b) => (
                   <tr key={b.id} className={b.active ? "" : "opacity-60"}>
-                    <td className="font-medium">{b.name}</td>
+                    <td>
+                      <BrandTag id={b.id} />
+                    </td>
                     <td>
                       {b.currency}
                       {b.currency !== base && (

@@ -15,6 +15,7 @@ import { deleteEntry, loadLists, saveBatch, updateEntry } from "../entry/actions
 import { saveCategory, toggleCategory } from "./actions";
 import type { T } from "@/lib/i18n";
 import { getT } from "@/lib/i18n-server";
+import { BrandTag } from "@/components/brand-tag";
 
 export default async function ExpensesPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const user = await requirePage("expenses");
@@ -71,7 +72,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
               note={t("For costs shared by several brands, enter each brand's share separately.")}
             />
           )}
-          <EntryList brandIds={scope.brandIds} range={range} cats={cats} sp={sp} may={rights.may} note={rights.note} brandName={scope.brandName} brandCurrency={scope.brandCurrency} multi={!scope.current} t={t} />
+          <EntryList brandIds={scope.brandIds} range={range} cats={cats} sp={sp} may={rights.may} note={rights.note} brandCurrency={scope.brandCurrency} multi={!scope.current} t={t} />
         </div>
       )}
 
@@ -269,7 +270,6 @@ async function EntryList({
   sp,
   may,
   note,
-  brandName,
   brandCurrency,
   multi,
   t,
@@ -280,7 +280,6 @@ async function EntryList({
   sp: Record<string, string | undefined>;
   may: (authorId: number | null, createdAt: Date) => boolean;
   note: string;
-  brandName: (id: number) => string;
   brandCurrency: (id: number) => string;
   multi: boolean;
   t: T;
@@ -321,8 +320,8 @@ async function EntryList({
           <table className="tbl">
             <thead>
               <tr>
-                <th>{t("Date")}</th>
                 {multi && <th>{t("Brand")}</th>}
+                <th>{t("Date")}</th>
                 <th>{t("Category")}</th>
                 <th className="r">{t("Amount")}</th>
                 <th>{t("Note")}</th>
@@ -334,8 +333,8 @@ async function EntryList({
               {rows.map((e) => {
                 return (
                   <tr key={e.id}>
+                    {multi && <td><BrandTag id={e.brandId} /></td>}
                     <td className="whitespace-nowrap">{d10(e.date)}</td>
-                    {multi && <td className="text-ink-2">{brandName(e.brandId)}</td>}
                     <td>
                       {t(e.category.name)} {e.category.kind === "INCOME" && <Chip tone="good">{t("Income")}</Chip>}
                     </td>

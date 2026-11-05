@@ -7,7 +7,7 @@ import { prisma } from "@/lib/db";
 import { dt } from "@/lib/format";
 import { tk } from "@/lib/i18n";
 import { getT } from "@/lib/i18n-server";
-import { getScope } from "@/lib/scope";
+import { BrandTag } from "@/components/brand-tag";
 
 const ACTIONS: Record<string, { label: string; tone: "good" | "brand" | "critical" | "warning" | "neutral" }> = {
   CREATE: { label: tk("Added"), tone: "good" },
@@ -52,7 +52,7 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
   const user = await requirePage("audit");
   const sp = await searchParams;
   const range = parseRange(sp, "week");
-  const [scope, t] = await Promise.all([getScope(user), getT()]);
+  const t = await getT();
   const page = Math.max(1, Number(sp.page) || 1);
 
   // People who can't see every brand only see changes in their brands (and none of the system-wide ones).
@@ -119,11 +119,11 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
             <table className="tbl">
               <thead>
                 <tr>
+                  <th>{t("Brand")}</th>
                   <th>{t("When")}</th>
                   <th>{t("Who")}</th>
                   <th>{t("Action")}</th>
                   <th>{t("What")}</th>
-                  <th>{t("Brand")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -131,6 +131,7 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
                   const a = ACTIONS[r.action] ?? { label: r.action, tone: "neutral" as const };
                   return (
                     <tr key={r.id}>
+                      <td className="whitespace-nowrap">{r.brandId ? <BrandTag id={r.brandId} /> : "–"}</td>
                       <td className="whitespace-nowrap text-ink-2">{dt(r.createdAt)}</td>
                       <td className="whitespace-nowrap">{r.userName ?? t("System")}</td>
                       <td>
@@ -146,7 +147,6 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
                           </details>
                         )}
                       </td>
-                      <td className="whitespace-nowrap text-ink-2">{r.brandId ? scope.brandName(r.brandId) : "–"}</td>
                     </tr>
                   );
                 })}

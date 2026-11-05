@@ -150,6 +150,8 @@ model Brand {
   currency  String   @default("MYR") @db.VarChar(5)
   /// 1 unit of this brand's currency = fxRate units of the base currency.
   fxRate    Decimal  @default(1) @db.Decimal(14, 6)
+  /// Colour the brand's name is shown in everywhere ("#rrggbb"), or none.
+  color     String?  @db.VarChar(9)
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
 

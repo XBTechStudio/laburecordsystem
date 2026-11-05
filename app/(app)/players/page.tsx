@@ -10,6 +10,7 @@ import { getScope } from "@/lib/scope";
 import { getSettings } from "@/lib/settings";
 import { tk } from "@/lib/i18n";
 import { getT } from "@/lib/i18n-server";
+import { BrandTag } from "@/components/brand-tag";
 
 const PER_PAGE = 50;
 const SORTS: [PlayerSort, string][] = [
@@ -157,7 +158,7 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
                     <tr key={p.id}>
                       {multi && (
                         <td className="font-semibold">
-                          {scope.brandName(p.brandId)}
+                          <BrandTag id={p.brandId} />
                           {mixedCurrency && <div className="text-xs font-normal text-muted">{sym(scope.brandCurrency(p.brandId))}</div>}
                         </td>
                       )}

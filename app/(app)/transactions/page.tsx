@@ -11,6 +11,7 @@ import { getT } from "@/lib/i18n-server";
 import { getScope } from "@/lib/scope";
 import { txnFilter } from "@/lib/txn-filter";
 import { EditCell, payTo, TxnFields } from "../entry/edit-cell";
+import { BrandTag } from "@/components/brand-tag";
 
 const PER_PAGE = 50;
 const FILTERS = ["q", "type", "channel", "by", "source", "player"];
@@ -140,8 +141,8 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
       </div>
 
       <div className={`mb-4 grid grid-cols-2 gap-3 ${seeWd ? "lg:grid-cols-4" : "lg:grid-cols-2"}`}>
-        <Tile label={t("Deposits")} value={money(tot.dep, scope.currency)} sub={t("{n} transactions", { n: count(tot.depN) })} />
-        {seeWd && <Tile label={t("Withdrawals")} value={money(tot.wd, scope.currency)} sub={t("{n} transactions", { n: count(tot.wdN) })} />}
+        <Tile tone="dep" label={t("Deposits")} value={money(tot.dep, scope.currency)} sub={t("{n} transactions", { n: count(tot.depN) })} />
+        {seeWd && <Tile tone="wd" label={t("Withdrawals")} value={money(tot.wd, scope.currency)} sub={t("{n} transactions", { n: count(tot.wdN) })} />}
         {seeWd && <Tile label={t("Deposits − withdrawals")} value={money(tot.dep - tot.wd, scope.currency)} sub={scope.current ? scope.current.name : t("All brands")} />}
         <div className="card p-3.5">
           <div className="text-xs text-ink-2">{t("Entered by")}</div>
@@ -175,8 +176,8 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
             <table className="tbl">
               <thead>
                 <tr>
-                  <th>{t("Time")}</th>
                   {multi && <th>{t("Brand")}</th>}
+                  <th>{t("Time")}</th>
                   <th>{t("Player")}</th>
                   <th>{t("Type")}</th>
                   <th className="r">{t("Amount")}</th>
@@ -191,8 +192,8 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
               <tbody>
                 {rows.map((tx) => (
                   <tr key={tx.id} className={tx.type === "DEPOSIT" ? "row-dep" : "row-wd"}>
+                    {multi && <td><BrandTag id={tx.brandId} /></td>}
                     <td className="whitespace-nowrap text-ink-2">{dt(tx.txnAt)}</td>
-                    {multi && <td className="text-ink-2">{scope.brandName(tx.brandId)}</td>}
                     <td className="font-medium">
                       <Link className="hover:underline" href={`/players/${tx.playerId}`}>
                         {tx.player.username}
@@ -230,11 +231,17 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
   );
 }
 
-function Tile({ label, value, sub }: { label: string; value: string; sub: string }) {
+/** Deposits blue and withdrawals red, like their rows below. */
+const TILE = {
+  dep: { card: "bg-[var(--dep-soft)]", value: "font-bold text-[var(--c-dep)]" },
+  wd: { card: "bg-[var(--wd-soft)]", value: "font-bold text-[var(--c-wd)]" },
+};
+
+function Tile({ label, value, sub, tone }: { label: string; value: string; sub: string; tone?: keyof typeof TILE }) {
   return (
-    <div className="card p-3.5">
+    <div className={`card p-3.5 ${tone ? TILE[tone].card : ""}`}>
       <div className="text-xs text-ink-2">{label}</div>
-      <div className="mt-1 text-lg font-semibold tabular-nums">{value}</div>
+      <div className={`mt-1 text-lg tabular-nums ${tone ? TILE[tone].value : "font-semibold"}`}>{value}</div>
       <div className="text-xs text-muted">{sub}</div>
     </div>
   );

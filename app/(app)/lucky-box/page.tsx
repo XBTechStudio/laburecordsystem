@@ -17,6 +17,7 @@ import { boxPromos, boxStates, type BoxState } from "@/lib/lucky-box";
 import { alertTick } from "@/lib/promo-engine";
 import { getScope } from "@/lib/scope";
 import { releaseFromBox } from "./actions";
+import { BrandTag } from "@/components/brand-tag";
 
 const MAX_ROWS = 300;
 const STATUS = [
@@ -173,11 +174,11 @@ export default async function LuckyBoxPage({ searchParams }: { searchParams: Pro
                     const cur = scope.brandCurrency(p.brandId);
                     return (
                       <tr key={p.id} className={p.active ? "" : "opacity-60"}>
+                        {multi && <td><BrandTag id={p.brandId} /></td>}
                         <td className="font-medium">
                           {p.name}
                           {!p.active && <span className="ml-1 text-xs text-muted">{t("Ended")}</span>}
                         </td>
-                        {multi && <td className="text-ink-2">{scope.brandName(p.brandId)}</td>}
                         <td className="text-ink-2">{boxText(p.rule, t, cur)}</td>
                         <td className="r">
                           {manage && (
@@ -202,8 +203,8 @@ export default async function LuckyBoxPage({ searchParams }: { searchParams: Pro
                 <table className="tbl">
                   <thead>
                     <tr>
-                      <th>{t("Player")}</th>
                       {multi && <th>{t("Brand")}</th>}
+                      <th>{t("Player")}</th>
                       <th>{t("Promotion")}</th>
                       <th className="r">{t("In the box")}</th>
                       <th>{t("Status")}</th>
@@ -221,13 +222,13 @@ export default async function LuckyBoxPage({ searchParams }: { searchParams: Pro
                       const mine = history.filter((h) => h.playerId === s.playerId && h.promotionId === s.promotionId);
                       return (
                         <tr key={`${s.playerId}:${s.promotionId}`}>
+                          {multi && <td><BrandTag id={s.brandId} /></td>}
                           <td>
                             <Link className="link font-medium" href={`/players/${s.playerId}`}>
                               {pl?.username}
                             </Link>
                             {pl?.name && <div className="text-xs text-muted">{pl.name}</div>}
                           </td>
-                          {multi && <td className="text-ink-2">{scope.brandName(s.brandId)}</td>}
                           <td>{p.name}</td>
                           <td className="r font-medium">{money(s.balance, cur)}</td>
                           <td>

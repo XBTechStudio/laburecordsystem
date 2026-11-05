@@ -11,6 +11,7 @@ import { LOCALE, tk, type T } from "@/lib/i18n";
 import { getLang, getT } from "@/lib/i18n-server";
 import { getScope } from "@/lib/scope";
 import { saveRule, saveShareholder, saveShares, toggleShareholder } from "./actions";
+import { BrandTag } from "@/components/brand-tag";
 
 const TABS = [
   ["overview", tk("Overview")],
@@ -34,7 +35,7 @@ export default async function DividendsPage({ searchParams }: { searchParams: Pr
       <PageHeader title={t("Shareholder dividends")} desc={t("Shares per brand, the rules for each brand's profit split, and what each shareholder is owed and has been paid.")} actions={<BrandFilter />} />
       <Tabs items={TABS.map(([k, label]) => ({ href: `/dividends?tab=${k}`, label: t(label), active: tab === k }))} />
       {tab === "overview" && <Overview ids={ids} rate={scope.rate} multi={!scope.current} currency={scope.currency} t={t} loc={loc} />}
-      {tab === "settlements" && <Settlements ids={ids} manage={manage} brands={scope.brands} brandName={scope.brandName} brandCurrency={scope.brandCurrency} t={t} loc={loc} />}
+      {tab === "settlements" && <Settlements ids={ids} manage={manage} brands={scope.brands} brandCurrency={scope.brandCurrency} t={t} loc={loc} />}
       {tab === "shares" && <Shares ids={ids} manage={manage} brands={scope.brands} t={t} />}
       {tab === "rules" && <Rules manage={manage} brands={scope.brands} t={t} />}
       {tab === "holders" && <Holders manage={manage} t={t} />}
@@ -125,8 +126,8 @@ async function Overview({ ids, rate, multi, currency, t, loc }: { ids: number[];
             <table className="tbl">
               <thead>
                 <tr>
-                  <th>{t("Period")}</th>
                   <th>{t("Brand")}</th>
+                  <th>{t("Period")}</th>
                   <th>{t("Shareholder")}</th>
                   <th className="r">{t("Unpaid")}</th>
                   <th />
@@ -159,7 +160,6 @@ async function Settlements({
   ids,
   manage,
   brands,
-  brandName,
   brandCurrency,
   t,
   loc,
@@ -167,7 +167,6 @@ async function Settlements({
   ids: number[];
   manage: boolean;
   brands: { id: number; name: string }[];
-  brandName: (id: number) => string;
   brandCurrency: (id: number) => string;
   t: T;
   loc: string;
@@ -223,8 +222,8 @@ async function Settlements({
                   const unpaid = s.lines.reduce((a, l) => a + n(l.amount) - n(l.paid), 0);
                   return (
                     <tr key={s.id}>
+                      <td><BrandTag id={s.brandId} /></td>
                       <td className="font-medium">{periodLabel(d10(s.periodStart), d10(s.periodEnd), loc)}</td>
-                      <td>{brandName(s.brandId)}</td>
                       <td className={`r ${n(s.profit) < 0 ? "text-critical-ink" : ""}`}>{money0(s.profit, cur)}</td>
                       <td className="r text-ink-2">{n(s.carriedIn) ? money0(s.carriedIn, cur) : "–"}</td>
                       <td className="r font-medium">{money0(s.distributable, cur)}</td>

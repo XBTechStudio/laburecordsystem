@@ -28,10 +28,14 @@ function Items({ nav, onPick, query }: { nav: NavGroup[]; onPick?: () => void; q
     return p === path && !!query && [...new URLSearchParams(q)].every(([k, v]) => query.get(k) === v);
   };
   const queried = nav.flatMap((g) => g.items).find((it) => it.href.includes("?") && matches(it.href));
+  const under = (href: string) => (href === "/" ? path === "/" : path === href || path.startsWith(href + "/"));
+  // Of several plain items over this page (All promotions, Tracked promotions), only the most specific is current.
+  const plain = nav.flatMap((g) => g.items).filter((it) => !it.href.includes("?") && under(it.href));
+  const best = plain.reduce<string | null>((a, it) => (!a || it.href.length > a.length ? it.href : a), null);
   const isActive = (href: string) => {
     if (href.includes("?")) return href === queried?.href;
     if (queried && queried.href.split("?")[0] === href) return false;
-    return href === "/" ? path === "/" : path === href || path.startsWith(href + "/");
+    return href === best;
   };
   return (
     <>

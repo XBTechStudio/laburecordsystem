@@ -15,6 +15,7 @@ import { alertTick } from "@/lib/promo-engine";
 import { getScope } from "@/lib/scope";
 import { getSettings } from "@/lib/settings";
 import { assignAlert, claimAlert, dismissAlert, releaseAlert } from "./actions";
+import { BrandTag } from "@/components/brand-tag";
 
 const PER_PAGE = 50;
 const daysAgo = (d: number) => new Date(Date.now() - d * 86400_000);
@@ -139,9 +140,9 @@ export default async function AlertsPage({ searchParams }: { searchParams: Promi
             <table className="tbl">
               <thead>
                 <tr>
+                  {multi && <th>{t("Brand")}</th>}
                   <th>{t("Type")}</th>
                   <th>{t("Player")}</th>
-                  {multi && <th>{t("Brand")}</th>}
                   <th>{t("What to tell the player")}</th>
                   <th>{t("For")}</th>
                   <th>{tab === "open" ? t("Raised") : t("Handled")}</th>
@@ -159,6 +160,7 @@ export default async function AlertsPage({ searchParams }: { searchParams: Promi
                   const mayAct = act && (full || !staffId || staffId === user.id);
                   return (
                     <tr key={a.id} className={focus === a.id ? "bg-brand-soft" : ""}>
+                      {multi && <td><BrandTag id={a.brandId} /></td>}
                       <td>
                         <Chip tone={KIND_TONE[k]}>{t(KIND_LABEL[k])}</Chip>
                       </td>
@@ -168,7 +170,6 @@ export default async function AlertsPage({ searchParams }: { searchParams: Promi
                         </Link>
                         {a.player.name && <div className="text-xs text-muted">{a.player.name}</div>}
                       </td>
-                      {multi && <td className="text-ink-2">{scope.brandName(a.brandId)}</td>}
                       <td>
                         <div className="font-medium">{text.title}</div>
                         <div className="text-xs text-ink-2">{text.detail}</div>

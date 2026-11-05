@@ -9,6 +9,7 @@ import { getT } from "@/lib/i18n-server";
 import { getScope } from "@/lib/scope";
 import { deleteTemplate, renameTemplate, undoImport } from "./actions";
 import { ImportWizard } from "./wizard";
+import { BrandTag } from "@/components/brand-tag";
 
 const KIND: Record<string, string> = { txn: tk("Deposits / withdrawals"), player: tk("Players"), claim: tk("Promotion claims"), box: tk("Lucky Box"), flow: tk("PG / bank statement") };
 
@@ -43,9 +44,9 @@ export default async function ImportPage() {
               <table className="tbl">
                 <thead>
                   <tr>
+                    <th>{t("Brand")}</th>
                     <th>{t("When")}</th>
                     <th>{t("File")}</th>
-                    <th>{t("Brand")}</th>
                     <th className="r">{t("Added")}</th>
                     <th className="r">{t("Skipped")}</th>
                     <th>{t("By")}</th>
@@ -55,6 +56,7 @@ export default async function ImportPage() {
                 <tbody>
                   {batches.map((b) => (
                     <tr key={b.id} className={b.undoneAt ? "opacity-60" : ""}>
+                      <td><BrandTag id={b.brandId} /></td>
                       <td className="whitespace-nowrap text-ink-2">{dt(b.createdAt)}</td>
                       <td>
                         <div className="max-w-56 truncate font-medium" title={b.filename}>
@@ -62,7 +64,6 @@ export default async function ImportPage() {
                         </div>
                         <div className="text-xs text-muted">{t(KIND[b.kind] ?? b.kind)}</div>
                       </td>
-                      <td>{scope.brandName(b.brandId)}</td>
                       <td className="r">{count(b.inserted)}</td>
                       <td className="r">{count(b.skipped)}</td>
                       <td className="text-ink-2">{b.userName}</td>

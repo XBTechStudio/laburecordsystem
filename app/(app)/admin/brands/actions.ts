@@ -13,7 +13,8 @@ function read(fd: FormData) {
   need(name, "Please give the brand a name.");
   need(/^[A-Z]{3,5}$/.test(currency), "Currency should be a code like MYR, AUD or USDT.");
   need(fxRate > 0, "The exchange rate must be more than 0.");
-  return { name, currency, fxRate };
+  const color = fd.get("useColor") === "on" && /^#[0-9a-f]{6}$/i.test(str(fd, "color")) ? str(fd, "color").toLowerCase() : null;
+  return { name, currency, fxRate, color };
 }
 
 export async function createBrand(_p: Result, fd: FormData) {
