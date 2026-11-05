@@ -1,15 +1,38 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { useT } from "@/components/i18n";
 
 export type NavGroup = { group: string; items: { href: string; label: string }[] };
 
+/** The menu, with the current page highlighted. Items may carry a query (Promotions per category): such an item is the current
+ *  one when the path and its query match; then a plain item for the same path is not. */
 function NavList({ nav, onPick }: { nav: NavGroup[]; onPick?: () => void }) {
+  return (
+    <Suspense fallback={<Items nav={nav} onPick={onPick} query={null} />}>
+      <WithQuery nav={nav} onPick={onPick} />
+    </Suspense>
+  );
+}
+
+function WithQuery({ nav, onPick }: { nav: NavGroup[]; onPick?: () => void }) {
+  return <Items nav={nav} onPick={onPick} query={useSearchParams()} />;
+}
+
+function Items({ nav, onPick, query }: { nav: NavGroup[]; onPick?: () => void; query: URLSearchParams | null }) {
   const path = usePathname();
-  const isActive = (href: string) => (href === "/" ? path === "/" : path === href || path.startsWith(href + "/"));
+  const matches = (href: string) => {
+    const [p, q] = href.split("?");
+    return p === path && !!query && [...new URLSearchParams(q)].every(([k, v]) => query.get(k) === v);
+  };
+  const queried = nav.flatMap((g) => g.items).find((it) => it.href.includes("?") && matches(it.href));
+  const isActive = (href: string) => {
+    if (href.includes("?")) return href === queried?.href;
+    if (queried && queried.href.split("?")[0] === href) return false;
+    return href === "/" ? path === "/" : path === href || path.startsWith(href + "/");
+  };
   return (
     <>
       {nav.map((g) => (
