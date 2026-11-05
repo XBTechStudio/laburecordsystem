@@ -236,7 +236,7 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
             <Empty title={t("No promotions yet")}>{t("Promotions are created here, or automatically when claims are entered or imported.")}</Empty>
           )
         ) : (
-          <TableWrap>
+          <TableWrap stickyHead>
             <table className="tbl">
               <thead>
                 <tr>

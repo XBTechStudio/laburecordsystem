@@ -200,6 +200,14 @@ body {
   .tbl .r {
     @apply text-right whitespace-nowrap;
   }
+  .tbl-sticky thead th {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--surface);
+    /* The bottom border scrolls away with the rows; this line stays with the header. */
+    box-shadow: inset 0 -1px 0 var(--line);
+  }
   .tbl tfoot td {
     @apply border-t border-b-0 border-line font-semibold;
   }

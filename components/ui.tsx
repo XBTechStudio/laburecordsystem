@@ -44,8 +44,10 @@ export function Card({
   );
 }
 
-export function TableWrap({ children }: { children: ReactNode }) {
-  return <div className="overflow-x-auto">{children}</div>;
+/** Scrolls a wide table sideways. `stickyHead`: a long table scrolls inside a screen-high box with its header row kept on top
+ *  (a sideways-scrolling box can't keep a header stuck to the page itself). */
+export function TableWrap({ children, stickyHead }: { children: ReactNode; stickyHead?: boolean }) {
+  return <div className={stickyHead ? "tbl-sticky max-h-[calc(100vh-5rem)] overflow-auto" : "overflow-x-auto"}>{children}</div>;
 }
 
 type Tone = "neutral" | "brand" | "good" | "warning" | "critical";
