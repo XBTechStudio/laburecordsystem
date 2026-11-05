@@ -39,7 +39,7 @@ const LOOKBACK = 2 * HOUR;
 const DEEP_LOOKBACK = 48 * HOUR;
 
 export type ChannelMap = Record<string, { id: number; label: string }>;
-export type SyncResult = { txns: number; claims: number; players: number; betDays: number; pages: number; more: boolean; /** Synced transactions removed because the platform rejected or cancelled them afterwards. */ undone: number };
+export type SyncResult = { txns: number; claims: number; players: number; betDays: number; pages: number; more: boolean; /** Synced transactions removed because the platform rejected them afterwards. */ undone: number };
 
 export const credsOf = (l: Pick<PlatformLink, "apiUrl" | "merchantId" | "accessId" | "tokenEnc">): Creds => ({
   apiUrl: l.apiUrl,
@@ -252,14 +252,14 @@ const UNDONE_LOOKBACK = 6 * HOUR;
 const UNDONE_FIRST_LOOKBACK = 7 * 24 * HOUR;
 
 /**
- * Staff sometimes reject or cancel a deposit or withdrawal after it completed, e.g. to split a manual top-up of 100 into
- * 30 + 30 + 40. We saved it while it was completed, so it is removed here once the platform lists it as rejected or cancelled.
+ * Staff sometimes reject a deposit or withdrawal after it completed, e.g. to split a manual top-up of 100 into
+ * 30 + 30 + 40. We saved it while it was completed, so it is removed here once the platform lists it as rejected. Cancelled ones are not looked for: none of them had been saved.
  * Only rows the sync saved itself are removed, never ones staff entered or imported.
  */
 async function dropUndone(link: PlatformLink, c: Creds, out: SyncResult, now: Date) {
   const from = new Date(Math.max(now.getTime() - (swept.has(link.id) ? UNDONE_LOOKBACK : UNDONE_FIRST_LOOKBACK), link.startAt.getTime()));
   const undone = new Map<string, { type: "DEPOSIT" | "WITHDRAW"; status: string }>();
-  for (const status of ["REJECTED", "CANCELLED"])
+  for (const status of ["REJECTED"])
     for (const type of ["DEPOSIT", "WITHDRAW"] as const)
       for (let p = 0; ; p++) {
         out.pages++;
