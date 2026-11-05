@@ -37,6 +37,8 @@ const WINDOW = 6 * HOUR;
 const LOOKBACK = 2 * HOUR;
 /** …and once an hour this far back. */
 const DEEP_LOOKBACK = 48 * HOUR;
+/** Credits paid outside the platform's promotions; each ends the promotion the player was under (see PlayerCredit). */
+export const CREDITS = ["REBATE", "COMMISSION"];
 
 export type ChannelMap = Record<string, { id: number; label: string }>;
 export type SyncResult = { txns: number; claims: number; players: number; betDays: number; pages: number; more: boolean; /** Synced transactions removed because the platform rejected them afterwards. */ undone: number };
@@ -152,10 +154,11 @@ async function saveTxns(link: PlatformLink & { brand: { name: string; currency: 
   const brandId = link.brandId;
   const money = rows.filter((r) => (r.type === "DEPOSIT" || r.type === "WITHDRAW") && link.syncTxns);
   const bonus = rows.filter((r) => r.type === "BONUS" && link.syncClaims);
-  if (!money.length && !bonus.length) return { txns: 0, claims: 0, players: 0 };
+  const credits = rows.filter((r) => CREDITS.includes(r.type) && link.syncClaims);
+  if (!money.length && !bonus.length && !credits.length) return { txns: 0, claims: 0, players: 0 };
   const players = await resolvePlayers(
     brandId,
-    [...money, ...bonus].map((r) => r.user!).filter(Boolean),
+    [...money, ...bonus, ...credits].map((r) => r.user!).filter(Boolean),
   );
   let txns = 0;
   let claims = 0;
@@ -240,6 +243,14 @@ async function saveTxns(link: PlatformLink & { brand: { name: string; currency: 
       if (claims) await safely("platform claims", () => linkClaims({ ref: { in: data.map((d) => d.ref!) }, promotion: { brandId } }));
     }
   }
+  if (credits.length) {
+    const data: Prisma.PlayerCreditCreateManyInput[] = [];
+    for (const r of credits) {
+      const playerId = r.user && players.ids.get(String(r.user.id));
+      if (playerId) data.push({ brandId, playerId, kind: r.type, amount: Math.abs(Math.round(Number(r.cash) * 100) / 100), at: new Date(r.createdDateTime), ref: r.id });
+    }
+    if (data.length) await prisma.playerCredit.createMany({ data, skipDuplicates: true });
+  }
   return { txns, claims, players: players.created };
 }
 
@@ -300,7 +311,7 @@ async function syncTxns(link: PlatformLink & { brand: { name: string; currency: 
   if (from < link.startAt) from = link.startAt;
   let cursor = link.txnCursor;
   // Only the types we keep: the platform also lists forfeits and other rows, often most of a day's pages.
-  const types = [...(link.syncTxns ? ["DEPOSIT", "WITHDRAW"] : []), ...(link.syncClaims ? ["BONUS"] : [])];
+  const types = [...(link.syncTxns ? ["DEPOSIT", "WITHDRAW"] : []), ...(link.syncClaims ? ["BONUS", ...CREDITS] : [])];
   const read = (from: Date, to: Date, type: string, pageIndex: number) => {
     out.pages++;
     return getTransactions(c, { sDate: platformTime(from, link.timeZone), eDate: platformTime(to, link.timeZone), pageIndex, type });

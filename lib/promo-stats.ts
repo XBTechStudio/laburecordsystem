@@ -5,9 +5,23 @@ import { addDays, dayStart, type Range } from "@/lib/dates";
 import { prisma } from "@/lib/db";
 import { n } from "@/lib/format";
 
-export type PromoStat = { claims: number; claimers: number; given: number; dep: number; depCount: number; wd: number; wdCount: number };
+export type PromoStat = {
+  claims: number;
+  claimers: number;
+  given: number;
+  dep: number;
+  depCount: number;
+  wd: number;
+  wdCount: number;
+  /** Withdrawn while playing under the promotion (see promoWithdrawals). */
+  pwd: number;
+  pwdCount: number;
+};
 
-export const emptyStat = (): PromoStat => ({ claims: 0, claimers: 0, given: 0, dep: 0, depCount: 0, wd: 0, wdCount: 0 });
+export const emptyStat = (): PromoStat => ({ claims: 0, claimers: 0, given: 0, dep: 0, depCount: 0, wd: 0, wdCount: 0, pwd: 0, pwdCount: 0 });
+
+/** A promotion run is looked for this far back before a withdrawal. */
+const RUN_DAYS = 31;
 
 /**
  * Per promotion: what was given in the period, and what its claimers deposited and withdrew
@@ -19,7 +33,7 @@ export async function promoStats(brandIds: number[], range: Range, windowDays: n
   const t0 = dayStart(range.from);
   const t1 = dayStart(addDays(range.to, 1));
   const list = Prisma.join(brandIds);
-  const [claims, txns] = await Promise.all([
+  const [claims, txns, pwds] = await Promise.all([
     prisma.$queryRaw<{ pid: number; claims: bigint; claimers: bigint; given: unknown }[]>`
       SELECT c.promotionId AS pid, COUNT(*) AS claims, COUNT(DISTINCT c.playerId) AS claimers, SUM(c.amount) AS given
       FROM \`PromoClaim\` c JOIN \`Promotion\` p ON p.id = c.promotionId
@@ -34,6 +48,7 @@ export async function promoStats(brandIds: number[], range: Range, windowDays: n
         GROUP BY c.promotionId, c.playerId
       ) w JOIN \`Txn\` t ON t.playerId = w.playerId AND t.txnAt >= w.f AND t.txnAt < DATE_ADD(w.l, INTERVAL ${windowDays} DAY)
       GROUP BY w.pid, t.type`,
+    promoWithdrawals(list, t0, t1),
   ]);
   const get = (pid: number) => {
     let s = stats.get(pid);
@@ -51,7 +66,41 @@ export async function promoStats(brandIds: number[], range: Range, windowDays: n
       s.wdCount = Number(row.cnt);
     }
   }
+  for (const row of pwds) Object.assign(get(row.pid), { pwd: n(row.amt as number), pwdCount: Number(row.cnt) });
   return stats;
+}
+
+/**
+ * Withdrawals made in [t0, t1) per promotion, counted the platform's way (its Promotion Report): a withdrawal belongs to
+ * the player's latest bonus before it, unless a deposit or a rebate/commission credit came in between.
+ */
+function promoWithdrawals(brandList: Prisma.Sql, t0: Date, t1: Date) {
+  const m0 = new Date(t0.getTime() - RUN_DAYS * 86400_000);
+  // Rows in time order per player; each bonus, deposit or credit starts a run (grp), and a run is a promotion's only when a bonus started it.
+  // At the same second a deposit comes before a bonus (deposit, then claim the deposit bonus), and both before a withdrawal.
+  return prisma.$queryRaw<{ pid: number; amt: unknown; cnt: bigint }[]>`
+    WITH wd AS (
+      SELECT playerId, txnAt AS at, amount FROM \`Txn\`
+      WHERE brandId IN (${brandList}) AND type = 'WITHDRAW' AND txnAt >= ${t0} AND txnAt < ${t1}
+    ),
+    who AS (SELECT DISTINCT playerId FROM wd),
+    ev AS (
+      SELECT playerId, at, 2 AS ord, NULL AS pid, amount, 0 AS starts FROM wd
+      UNION ALL
+      SELECT c.playerId, c.claimedAt, 1, c.promotionId, NULL, 1 FROM \`PromoClaim\` c JOIN who USING (playerId)
+      WHERE c.claimedAt >= ${m0} AND c.claimedAt < ${t1}
+      UNION ALL
+      SELECT t.playerId, t.txnAt, 0, NULL, NULL, 1 FROM \`Txn\` t JOIN who USING (playerId)
+      WHERE t.type = 'DEPOSIT' AND t.txnAt >= ${m0} AND t.txnAt < ${t1}
+      UNION ALL
+      SELECT x.playerId, x.at, 0, NULL, NULL, 1 FROM \`PlayerCredit\` x JOIN who USING (playerId)
+      WHERE x.at >= ${m0} AND x.at < ${t1}
+    ),
+    runs AS (SELECT ev.*, SUM(starts) OVER (PARTITION BY playerId ORDER BY at, ord ROWS UNBOUNDED PRECEDING) AS grp FROM ev),
+    owned AS (SELECT runs.*, MAX(pid) OVER (PARTITION BY playerId, grp) AS owner FROM runs)
+    SELECT owner AS pid, SUM(amount) AS amt, COUNT(*) AS cnt FROM owned
+    WHERE ord = 2 AND owner IS NOT NULL
+    GROUP BY owner`;
 }
 
 /** W/L after promo, cost ratio and the keep/adjust/cancel suggestion. */

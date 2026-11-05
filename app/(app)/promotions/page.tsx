@@ -67,9 +67,11 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
     .map((p) => {
       const s = stats.get(p.id) ?? emptyStat();
       const j = judge(s, settings.promoAdjustPercent);
-      return { p, s, net: j.net, cost: j.cost, verdict: VERDICT[j.verdict] };
+      // Cost ratio as the platform reports it: what was withdrawn under the promotion against the bonus given.
+      const cost = s.given ? (s.pwd / s.given) * 100 : NaN;
+      return { p, s, net: j.net, cost, verdict: VERDICT[j.verdict] };
     })
-    .filter(({ p, s }) => !claimedOnly || s.claims > 0 || readRule(p.rule) || readBox(p.box) || dayOf(p.createdAt) >= range.from)
+    .filter(({ p, s }) => !claimedOnly || s.claims > 0 || s.pwdCount > 0 || readRule(p.rule) || readBox(p.box) || dayOf(p.createdAt) >= range.from)
     .sort((a, b) => b.s.given - a.s.given);
   const totals = rows.reduce(
     (a, r) => {
@@ -246,8 +248,10 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
                   <th className="r">{t("Claims")}</th>
                   <th className="r">{t("Bonus given")}</th>
                   <th className="r">{t("Claimers' deposits")}</th>
-                  <th className="r">{t("Claimers' withdrawals")}</th>
-                  <th className="r">{t("Cost ratio")}</th>
+                  <th className="r" title={t("Withdrawals made while playing under this promotion: after its bonus, before the player's next deposit, bonus or rebate. As in the platform's Promotion Report.")}>
+                    {t("Promo withdrawals")}
+                  </th>
+                  <th className="r" title={t("Promo withdrawals ÷ bonus given")}>{t("Cost ratio")}</th>
                   <th className="r">{t("W/L after promo")}</th>
                   <th>{t("Suggestion")}</th>
                   {manage && <th />}
@@ -314,7 +318,7 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
                         {money0(s.dep, cur)} <span className="text-xs text-muted">×{s.depCount}</span>
                       </td>
                       <td className="r">
-                        {money0(s.wd, cur)} <span className="text-xs text-muted">×{s.wdCount}</span>
+                        {money0(s.pwd, cur)} <span className="text-xs text-muted">×{s.pwdCount}</span>
                       </td>
                       <td className="r">{Number.isFinite(cost) ? pct(cost) : "–"}</td>
                       <td className={`r font-medium ${net < 0 ? "text-critical-ink" : ""}`}>{s.claims ? money0(net, cur) : "–"}</td>

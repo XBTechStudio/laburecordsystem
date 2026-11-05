@@ -10,7 +10,7 @@ import { count, money0, n, pct } from "@/lib/format";
 import { getT } from "@/lib/i18n-server";
 import { converted, dailyRows, groupBy, playerCounts, sum } from "@/lib/metrics";
 import { queryPlayers } from "@/lib/player-query";
-import { judge, promoStats } from "@/lib/promo-stats";
+import { emptyStat, judge, promoStats } from "@/lib/promo-stats";
 import { getScope } from "@/lib/scope";
 import { getSettings } from "@/lib/settings";
 import { accountDays } from "@/lib/statements";
@@ -136,7 +136,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   }
 
   const losers = promoList
-    .map((p) => ({ p, j: judge(promos.get(p.id) ?? { claims: 0, claimers: 0, given: 0, dep: 0, depCount: 0, wd: 0, wdCount: 0 }, settings.promoAdjustPercent) }))
+    .map((p) => ({ p, j: judge(promos.get(p.id) ?? emptyStat(), settings.promoAdjustPercent) }))
     .filter((x) => x.j.verdict === "cancel")
     .sort((a, b) => a.j.net * scope.rate(a.p.brandId) - b.j.net * scope.rate(b.p.brandId));
   if (losers.length)

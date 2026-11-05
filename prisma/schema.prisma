@@ -202,6 +202,7 @@ model Player {
   alerts     Alert[]
   boxes      BoxEntry[]
   days       PlayerDay[]
+  credits    PlayerCredit[]
 
   @@unique([brandId, username])
   @@unique([brandId, extId])
@@ -774,4 +775,22 @@ model PlayerDay {
 
   @@unique([playerId, day])
   @@index([brandId, day])
+}
+
+/// Credits the platform pays outside its promotions (rebates, commission), from the platform API. Like a deposit or a new
+/// bonus, one ends the promotion a player was playing under: later withdrawals no longer count for it (lib/promo-stats.ts).
+model PlayerCredit {
+  id       Int      @id @default(autoincrement())
+  brandId  Int
+  playerId Int
+  /// The platform's transaction type: REBATE or COMMISSION.
+  kind     String   @db.VarChar(20)
+  amount   Decimal  @db.Decimal(14, 2)
+  at       DateTime
+  ref      String   @db.VarChar(80)
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([brandId, ref])
+  @@index([playerId, at])
 }
