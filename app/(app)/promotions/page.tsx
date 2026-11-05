@@ -248,7 +248,11 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
                         )}
                       </td>
                       <td className="r">{count(s.claimers)}</td>
-                      <td className="r">{count(s.claims)}</td>
+                      <td className="r">
+                        <Link className="link" href={`/promotions/${p.id}/claims?from=${range.from}&to=${range.to}`}>
+                          {count(s.claims)}
+                        </Link>
+                      </td>
                       <td className="r">{money0(s.given, cur)}</td>
                       <td className="r">
                         {money0(s.dep, cur)} <span className="text-xs text-muted">×{s.depCount}</span>

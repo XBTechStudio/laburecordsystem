@@ -466,8 +466,8 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
                         <td>
                           {c.promotion.name}
                           {c.voidedAt && (
-                            <span className="ml-1.5" title={t("The player cleared their balance right after this bonus and was given the same bonus again, so only that one counts.")}>
-                              <Chip>{t("Cleared, given again")}</Chip>
+                            <span className="ml-1.5" title={c.replacedById ? t("The player cleared their balance right after this bonus and was given the same bonus again, so only that one counts.") : undefined}>
+                              {c.replacedById ? <Chip>{t("Cleared, given again")}</Chip> : <Chip tone="warning">{t("Not counted")}</Chip>}
                             </span>
                           )}
                         </td>
