@@ -1,11 +1,12 @@
 import { ActionButton, ActionForm, AutoSelect, Dialog, Submit } from "@/components/client";
+import { BrandFilter } from "@/components/brand-filter";
 import { RangeBar } from "@/components/range";
 import { Card, Chip, Empty, Field, Info, PageHeader, TableWrap } from "@/components/ui";
 import { can, requirePage } from "@/lib/auth";
 import { parseRange } from "@/lib/dates";
 import { prisma } from "@/lib/db";
 import { count, money0, pct } from "@/lib/format";
-import { emptyStat, judge, promoStats } from "@/lib/promo-stats";
+import { emptyStat, judge, promoStats, type PromoStat } from "@/lib/promo-stats";
 import { dateOnlyStr, dayOf } from "@/lib/dates";
 import { PERIODS, readRule } from "@/lib/promo-rule";
 import Link from "next/link";
@@ -47,10 +48,13 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
   const [scope, settings, t] = await Promise.all([getScope(user), getSettings(), getT()]);
   const range = parseRange(sp, "month");
   const manage = can(user, "promotions", 3);
-  // Default: running promotions with claims in the dates, plus ones set up to be tracked, Lucky Box ones and new ones.
-  const showEnded = sp.ended === "1";
-  const claimedOnly = !sp.ended;
   const cat = sp.cat ?? "";
+  // All promotions (or those without a category) is where they are sorted into categories and set up: no figures.
+  // A category shows its figures.
+  const listView = !cat || cat === "-";
+  // Figures default to running promotions with claims in the dates, plus ones set up to be tracked, Lucky Box ones and new ones.
+  const showEnded = sp.ended === "1";
+  const claimedOnly = !listView && !sp.ended;
   const ids = scope.brandIds;
 
   const all = ids.length
@@ -59,7 +63,7 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
   // Categories still on promotions after being renamed or removed in Settings stay pickable.
   const categories = [...new Set([...settings.promoCategories, ...all.map((p) => p.category).filter((c): c is string => !!c)])];
   const promos = cat ? all.filter((p) => (cat === "-" ? !p.category : p.category === cat)) : all;
-  const stats = await promoStats(ids, range, settings.promoWindowDays);
+  const stats = listView ? new Map<number, PromoStat>() : await promoStats(ids, range, settings.promoWindowDays);
   const playerTiers = [...settings.tierScoring.tiers.map((x) => x.name), settings.tierScoring.lowestName];
 
   const rows = promos
@@ -71,7 +75,7 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
       return { p, s, net: j.net, cost, verdict: VERDICT[j.verdict] };
     })
     .filter(({ p, s }) => !claimedOnly || s.claims > 0 || s.pwdCount > 0 || readRule(p.rule) || readBox(p.box) || dayOf(p.createdAt) >= range.from)
-    .sort((a, b) => b.s.given - a.s.given);
+    .sort((a, b) => (listView ? a.p.name.localeCompare(b.p.name) || scope.brandName(a.p.brandId).localeCompare(scope.brandName(b.p.brandId)) : b.s.given - a.s.given));
   const totals = rows.reduce(
     (a, r) => {
       const k = scope.rate(r.p.brandId);
@@ -84,14 +88,18 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
   return (
     <div className="max-w-[1400px]">
       <PageHeader
-        title={t("Promotions")}
+        title={listView ? t("All promotions") : cat}
         desc={
+          listView ? (
+            t("Sort promotions into categories and choose which CS can offer. Each category in the menu shows its promotions' figures.")
+          ) : (
           <>
             {t("What each promotion cost and what its claimers did afterwards.")}{" "}
             <Info>
               {t("A claimer's deposits and withdrawals count from their first claim in the period until {n} days after their last claim. “W/L after promo” = their deposits − withdrawals − bonus given. Suggestion: Cancel if that is negative, Adjust if the bonus is over {p}% of their deposits, otherwise Keep. Change these in Settings.", { n: settings.promoWindowDays, p: settings.promoAdjustPercent })}
             </Info>
           </>
+          )
         }
         actions={
           manage && (
@@ -125,15 +133,15 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
         }
       />
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <RangeBar path="/promotions" range={range} params={sp} />
+        {listView ? <BrandFilter /> : <RangeBar path="/promotions" range={range} params={sp} />}
         <form action="/promotions" className="flex flex-wrap gap-2">
           {Object.entries(sp)
             .filter(([k, v]) => v && k !== "ended" && k !== "cat")
             .map(([k, v]) => (
               <input key={k} type="hidden" name={k} value={v} />
             ))}
-          <AutoSelect name="ended" defaultValue={showEnded ? "1" : ""} className="input h-8 w-auto">
-            <option value="">{t("Claimed in these dates")}</option>
+          <AutoSelect name="ended" defaultValue={showEnded ? "1" : listView ? "running" : (sp.ended ?? "")} className="input h-8 w-auto">
+            {!listView && <option value="">{t("Claimed in these dates")}</option>}
             <option value="running">{t("Running promotions")}</option>
             <option value="1">{t("Include ended ones")}</option>
           </AutoSelect>
@@ -149,6 +157,7 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
         </form>
       </div>
 
+      {!listView && (
       <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4">
         {[
           ["given", t("Bonus given"), money0(totals.given, scope.currency)],
@@ -162,6 +171,7 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
           </div>
         ))}
       </div>
+      )}
 
       <Card flush>
         {rows.length === 0 ? (
@@ -179,6 +189,8 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
                   <th>{t("Promotion")}</th>
                   <th>{t("Category")}</th>
                   <th title={t("Whether CS can pick it under Offer used when logging a contact")}>{t("Offer used")}</th>
+                  {!listView && (
+                  <>
                   <th className="r">{t("Claimers")}</th>
                   <th className="r">{t("Claims")}</th>
                   <th className="r">{t("Bonus given")}</th>
@@ -190,6 +202,8 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
                   <th className="r" title={t("Actual promo withdrawals ÷ bonus given")}>{t("Cost ratio")}</th>
                   <th className="r">{t("W/L after promo")}</th>
                   <th>{t("Suggestion")}</th>
+                  </>
+                  )}
                   {manage && <th />}
                 </tr>
               </thead>
@@ -247,6 +261,8 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
                           <span className="text-muted">{t("Hidden")}</span>
                         )}
                       </td>
+                      {!listView && (
+                      <>
                       <td className="r">{count(s.claimers)}</td>
                       <td className="r">
                         <Link className="link" href={`/promotions/${p.id}/claims?from=${range.from}&to=${range.to}`}>
@@ -274,6 +290,8 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
                       <td>
                         <Chip tone={verdict[1]}>{t(verdict[0])}</Chip>
                       </td>
+                      </>
+                      )}
                       {manage && (
                         <td className="r space-x-1">
                           <Dialog label={t("Edit")} title={t("Edit {name}", { name: p.name })}>

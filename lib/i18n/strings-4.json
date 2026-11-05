@@ -37,6 +37,7 @@
 ["Return window (days)","回流认定天数","Jangka kembali (hari)"],
 ["Return window must be at least 1 day.","回流认定天数至少 1 天。","Jangka kembali minimal 1 hari."],
 ["Returned","回流人数","Kembali"],
+["Sort promotions into categories and choose which CS can offer. Each category in the menu shows its promotions' figures.","在这里为优惠设置分类，并选择客服可以使用哪些优惠。左侧菜单的每个分类会显示该分类优惠的数据。","Susun promosi mengikut kategori dan pilih yang boleh ditawarkan CS. Setiap kategori dalam menu menunjukkan angka promosinya."],
 ["Claims: {name}","领取记录：{name}","Tuntutan: {name}"],
 ["Platform","平台","Platform"],
 ["Counted","计算","Dikira"],
