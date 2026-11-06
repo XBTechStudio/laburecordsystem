@@ -53,6 +53,7 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
           <h1 className="mt-1 text-xl font-semibold">{acc.name}</h1>
           <p className="text-sm text-ink-2">
             {acc.type === "PG" ? t("Payment gateway") : t("Bank")} · {cur} · {t("fee")} {n(acc.feePercent)}% + {n(acc.feeFixed).toFixed(2)}
+            {n(acc.wdFeePercent) > 0 && ` · ${t("withdrawal fee")} ${n(acc.wdFeePercent)}%`}
           </p>
           {settleFees._count > 0 && (
             <p className="text-sm text-ink-2">
@@ -94,7 +95,8 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
               [t("Starting balance"), now?.opening ?? 0, ""],
               [t("Deposits received"), now?.deposits ?? 0, "+"],
               [t("Withdrawals paid"), -(now?.withdrawals ?? 0), "−"],
-              [acc.feeAtSettlement ? t("Fees (taken at settlement)") : t("Fees (fee rate × deposits)"), -(now?.fees ?? 0), "−"],
+              [acc.feeAtSettlement ? t("Fees (taken at settlement)") : t("Fees (fee rate × deposits)"), -((now?.fees ?? 0) - (now?.wdFees ?? 0)), "−"],
+              ...(n(acc.wdFeePercent) > 0 || now?.wdFees ? [[t("Withdrawal fees (fee rate × withdrawals)"), -(now?.wdFees ?? 0), "−"]] : []),
               [t("Transfers and other movements"), now?.moves ?? 0, "±"],
             ].map(([l, v, s]) => (
               <div key={String(l)} className="flex justify-between border-b border-line pb-1.5">
@@ -130,6 +132,9 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
                 </Field>
                 <Field label={t("Fixed fee per deposit")}>
                   <input name="feeFixed" className="input" inputMode="decimal" defaultValue={n(acc.feeFixed)} />
+                </Field>
+                <Field label={t("Withdrawal fee %")} hint={t("Of each withdrawal, taken when it is paid")}>
+                  <input name="wdFeePercent" className="input" inputMode="decimal" defaultValue={n(acc.wdFeePercent)} />
                 </Field>
               </div>
               <label className="flex items-start gap-2 text-sm">

@@ -30,7 +30,7 @@
 ["Difference: {diff}", "差额：{diff}", "Selisih: {diff}"],
 ["e.g. PG settlement to bank", "例如 PG 结算到银行", "mis. settlement PG ke bank"],
 ["e.g. withdrawal paid but not entered yet", "例如 提款已付但还没录", "mis. penarikan sudah dibayar tapi belum diinput"],
-["Each PG/bank's fee rate applied to the deposits it received.", "按每个 PG/银行的费率，从它收到的充值算出。", "Tarif biaya tiap PG/bank dikalikan dengan deposit yang diterimanya."],
+["Each PG/bank's fee rates applied to the deposits it received and the withdrawals it paid.", "按每个 PG/银行的费率，从它收到的充值和付出的提款算出。", "Tarif biaya tiap PG/bank dikalikan dengan deposit yang diterima dan penarikan yang dibayarkannya."],
 ["Enter an amount.", "请填写金额。", "Isi jumlahnya."],
 ["Enter balance", "填实际余额", "Input saldo"],
 ["Enter the balance shown in the bank or PG.", "请填写银行或 PG 显示的余额。", "Isi saldo yang tertera di bank atau PG."],
@@ -98,5 +98,5 @@
 ["What explains it?", "原因是什么？", "Apa penyebabnya?"],
 ["What happened", "发生了什么", "Apa yang terjadi"],
 ["Withdrawals paid", "付出的提款", "Penarikan dibayar"],
-["Worked out from each PG/bank's fee rate on deposits", "按每个 PG/银行对充值的费率计算", "Dihitung dari tarif biaya tiap PG/bank atas deposit"]
+["Worked out from each PG/bank's fee rates on deposits and withdrawals", "按每个 PG/银行对充值和提款的费率计算", "Dihitung dari tarif biaya tiap PG/bank atas deposit dan penarikan"]
 ]

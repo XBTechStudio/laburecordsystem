@@ -201,8 +201,9 @@ export async function setOpening(_p: Result, fd: FormData) {
     const at = TIME.test(str(fd, "openingAt")) ? fromLocalInput(str(fd, "openingAt")) : null;
     const feePercent = amount(str(fd, "feePercent") || "0");
     const feeFixed = amount(str(fd, "feeFixed") || "0");
+    const wdFeePercent = amount(str(fd, "wdFeePercent") || "0");
     const currency = (str(fd, "currency") || "MYR").toUpperCase();
-    need(feePercent >= 0 && feeFixed >= 0, "Fees can't be negative.");
+    need(feePercent >= 0 && feeFixed >= 0 && wdFeePercent >= 0, "Fees can't be negative.");
     need(/^[A-Z]{3,5}$/.test(currency), "Currency should be a code like MYR, AUD or USDT.");
     const statementUrl = str(fd, "statementUrl") ? checkStatementUrl(str(fd, "statementUrl")) : null;
     const before = await prisma.payChannel.findUniqueOrThrow({ where: { id } });
@@ -214,6 +215,7 @@ export async function setOpening(_p: Result, fd: FormData) {
         openingAt: at,
         feePercent,
         feeFixed,
+        wdFeePercent,
         currency,
         type: str(fd, "type") === "PG" ? "PG" : "BANK",
         feeAtSettlement: fd.get("feeAtSettlement") === "on",

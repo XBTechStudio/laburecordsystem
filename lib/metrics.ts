@@ -43,11 +43,12 @@ export async function dailyRows(brandIds: number[], r: Range): Promise<DayRow[]>
       SELECT brandId, DATE(DATE_ADD(txnAt, INTERVAL 8 HOUR)) AS d, type, SUM(amount) AS amt, COUNT(*) AS cnt
       FROM \`Txn\` WHERE brandId IN (${ids}) AND txnAt >= ${t0} AND txnAt < ${t1}
       GROUP BY brandId, d, type`,
-    // PG/bank fees: each account's fee rate applied to the deposits it received.
+    // PG/bank fees: each account's fee rates applied to the deposits it received and the withdrawals it paid.
     prisma.$queryRaw<{ brandId: number; d: Date; fee: unknown }[]>`
-      SELECT t.brandId, DATE(DATE_ADD(t.txnAt, INTERVAL 8 HOUR)) AS d, SUM(t.amount * c.feePercent / 100 + c.feeFixed) AS fee
+      SELECT t.brandId, DATE(DATE_ADD(t.txnAt, INTERVAL 8 HOUR)) AS d,
+        SUM(CASE WHEN t.type = 'DEPOSIT' THEN t.amount * c.feePercent / 100 + c.feeFixed ELSE t.amount * c.wdFeePercent / 100 END) AS fee
       FROM \`Txn\` t JOIN \`PayChannel\` c ON c.id = t.channelId
-      WHERE t.type = 'DEPOSIT' AND t.brandId IN (${ids}) AND t.txnAt >= ${t0} AND t.txnAt < ${t1}
+      WHERE t.type IN ('DEPOSIT', 'WITHDRAW') AND t.brandId IN (${ids}) AND t.txnAt >= ${t0} AND t.txnAt < ${t1}
       GROUP BY t.brandId, d`,
     prisma.$queryRaw<{ brandId: number; d: Date; amt: unknown }[]>`
       SELECT p.brandId, DATE(DATE_ADD(c.claimedAt, INTERVAL 8 HOUR)) AS d, SUM(c.amount) AS amt

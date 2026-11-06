@@ -7,20 +7,22 @@ import { n } from "@/lib/format";
 
 const EPOCH = new Date("1970-01-01T00:00:00Z");
 
-export type Balance = { opening: number; deposits: number; withdrawals: number; fees: number; moves: number; expected: number };
+/** `fees` is every fee (deposit and withdrawal); `wdFees` is the withdrawal part of it. */
+export type Balance = { opening: number; deposits: number; withdrawals: number; fees: number; wdFees: number; moves: number; expected: number };
 
 /**
  * What each PG/bank account should hold at `at`, from its opening balance and everything recorded since:
- * + deposits − withdrawals − deposit fees (the account's fee rate) ± manual moves.
+ * + deposits − withdrawals − fees (the account's deposit and withdrawal fee rates) ± manual moves.
  */
 export async function expectedBalances(at: Date = new Date(), channelIds?: number[]) {
   const only = channelIds?.length ? Prisma.sql`AND c.id IN (${Prisma.join(channelIds)})` : Prisma.empty;
   const [txns, moves, channels] = await Promise.all([
-    prisma.$queryRaw<{ id: number; dep: unknown; wd: unknown; fee: unknown }[]>`
+    prisma.$queryRaw<{ id: number; dep: unknown; wd: unknown; fee: unknown; wdFee: unknown }[]>`
       SELECT c.id,
         SUM(CASE WHEN t.type = 'DEPOSIT' THEN t.amount ELSE 0 END) AS dep,
         SUM(CASE WHEN t.type = 'WITHDRAW' THEN t.amount ELSE 0 END) AS wd,
-        SUM(CASE WHEN t.type = 'DEPOSIT' AND c.feeAtSettlement = 0 THEN t.amount * c.feePercent / 100 + c.feeFixed ELSE 0 END) AS fee
+        SUM(CASE WHEN t.type = 'DEPOSIT' AND c.feeAtSettlement = 0 THEN t.amount * c.feePercent / 100 + c.feeFixed ELSE 0 END) AS fee,
+        SUM(CASE WHEN t.type = 'WITHDRAW' THEN t.amount * c.wdFeePercent / 100 ELSE 0 END) AS wdFee
       FROM \`PayChannel\` c JOIN \`Txn\` t ON t.channelId = c.id AND t.txnAt >= COALESCE(c.openingAt, ${EPOCH}) AND t.txnAt <= ${at}
       WHERE 1 = 1 ${only}
       GROUP BY c.id`,
@@ -34,14 +36,15 @@ export async function expectedBalances(at: Date = new Date(), channelIds?: numbe
   const out = new Map<number, Balance>();
   for (const c of channels) {
     const opening = c.openingAt && c.openingAt > at ? 0 : n(c.openingBalance);
-    out.set(c.id, { opening, deposits: 0, withdrawals: 0, fees: 0, moves: 0, expected: opening });
+    out.set(c.id, { opening, deposits: 0, withdrawals: 0, fees: 0, wdFees: 0, moves: 0, expected: opening });
   }
   for (const t of txns) {
     const b = out.get(t.id);
     if (!b) continue;
     b.deposits = n(t.dep as number);
     b.withdrawals = n(t.wd as number);
-    b.fees = n(t.fee as number);
+    b.wdFees = n(t.wdFee as number);
+    b.fees = n(t.fee as number) + b.wdFees;
   }
   for (const m of moves) {
     const b = out.get(m.id);
@@ -71,9 +74,10 @@ export async function ledger(channelId: number, r: Range): Promise<LedgerDay[]> 
   const t1 = dayStart(addDays(r.to, 1));
   const before = (await expectedBalances(new Date(t0.getTime() - 1), [channelId])).get(channelId)?.expected ?? 0;
   const [txns, moves] = await Promise.all([
-    prisma.$queryRaw<{ d: string; type: string; amt: unknown; cnt: bigint; fee: unknown }[]>`
+    prisma.$queryRaw<{ d: string; type: string; amt: unknown; cnt: bigint; fee: unknown; wdFee: unknown }[]>`
       SELECT DATE_FORMAT(DATE_ADD(t.txnAt, INTERVAL 8 HOUR), '%Y-%m-%d') AS d, t.type, SUM(t.amount) AS amt, COUNT(*) AS cnt,
-        SUM(CASE WHEN t.type = 'DEPOSIT' AND c.feeAtSettlement = 0 THEN t.amount * c.feePercent / 100 + c.feeFixed ELSE 0 END) AS fee
+        SUM(CASE WHEN t.type = 'DEPOSIT' AND c.feeAtSettlement = 0 THEN t.amount * c.feePercent / 100 + c.feeFixed ELSE 0 END) AS fee,
+        SUM(CASE WHEN t.type = 'WITHDRAW' THEN t.amount * c.wdFeePercent / 100 ELSE 0 END) AS wdFee
       FROM \`Txn\` t JOIN \`PayChannel\` c ON c.id = t.channelId
       WHERE t.channelId = ${channelId} AND t.txnAt >= ${t0} AND t.txnAt < ${t1} AND t.txnAt >= COALESCE(c.openingAt, ${EPOCH})
       GROUP BY d, t.type`,
@@ -96,7 +100,7 @@ export async function ledger(channelId: number, r: Range): Promise<LedgerDay[]> 
       depositCount: Number(dep?.cnt ?? 0),
       withdrawals: n(wd?.amt as number),
       withdrawCount: Number(wd?.cnt ?? 0),
-      fees: n(dep?.fee as number),
+      fees: n(dep?.fee as number) + n(wd?.wdFee as number),
       moves: n(mv?.amt as number),
       closing: 0,
       change: 0,

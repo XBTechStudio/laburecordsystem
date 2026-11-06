@@ -74,7 +74,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             </fieldset>
             <fieldset className="space-y-2.5">
               <legend className="label">{t("Net profit = Win/Loss …")}</legend>
-              <Check name="fees" label={"− " + t("PG and bank fees")} hint={t("Worked out from each PG/bank's fee rate on deposits")} on={s.profit.fees} disabled={ro} />
+              <Check name="fees" label={"− " + t("PG and bank fees")} hint={t("Worked out from each PG/bank's fee rates on deposits and withdrawals")} on={s.profit.fees} disabled={ro} />
               <Check name="promos" label={"− " + t("Promotions given")} hint={t("From promotion claims")} on={s.profit.promos} disabled={ro} />
               <Check name="expenses" label={"− " + t("Expenses")} hint={t("Salary, advertising and your other expense categories")} on={s.profit.expenses} disabled={ro} />
               <Check name="income" label={"+ " + t("Other income")} hint={t("Income categories, e.g. provider rebates")} on={s.profit.income} disabled={ro} />
@@ -250,6 +250,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                   <th>{t("Currency")}</th>
                   <th className="r">{t("Fee %")}</th>
                   <th className="r">{t("Fixed fee / txn")}</th>
+                  <th className="r">{t("Withdrawal fee %")}</th>
                   <th>{t("Status")}</th>
                   {!ro && <th />}
                 </tr>
@@ -263,11 +264,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                     <td>{c.currency}</td>
                     <td className="r">{n(c.feePercent)}%</td>
                     <td className="r">{n(c.feeFixed).toFixed(2)}</td>
+                    <td className="r">{n(c.wdFeePercent)}%</td>
                     <td>{c.active ? <Chip tone="good">{t("Active")}</Chip> : <Chip>{t("Inactive")}</Chip>}</td>
                     {!ro && (
                       <td className="r space-x-1">
                         <Dialog label={t("Edit")} title={t("Edit {name}", { name: c.name })}>
-                          <ChannelForm t={t} base={s.baseCurrency} c={{ id: c.id, name: c.name, code: c.code, type: c.type, currency: c.currency, feePercent: n(c.feePercent), feeFixed: n(c.feeFixed) }} />
+                          <ChannelForm t={t} base={s.baseCurrency} c={{ id: c.id, name: c.name, code: c.code, type: c.type, currency: c.currency, feePercent: n(c.feePercent), feeFixed: n(c.feeFixed), wdFeePercent: n(c.wdFeePercent) }} />
                         </Dialog>
                         <ActionButton action={toggleChannel} fields={{ id: c.id }}>
                           {c.active ? t("Deactivate") : t("Reactivate")}
@@ -278,7 +280,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 ))}
                 {channels.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="py-8 text-center text-ink-2">
+                    <td colSpan={9} className="py-8 text-center text-ink-2">
                       {t("No channels yet. Add each payment gateway and bank account you use.")}
                     </td>
                   </tr>
@@ -303,7 +305,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   );
 }
 
-function ChannelForm({ c, t, base }: { c?: { id: number; name: string; code: string | null; type: string; currency: string; feePercent: number; feeFixed: number }; t: T; base: string }) {
+function ChannelForm({ c, t, base }: { c?: { id: number; name: string; code: string | null; type: string; currency: string; feePercent: number; feeFixed: number; wdFeePercent: number }; t: T; base: string }) {
   return (
     <ActionForm action={saveChannel} close className="space-y-3">
       {c && <input type="hidden" name="id" value={c.id} />}
@@ -322,6 +324,9 @@ function ChannelForm({ c, t, base }: { c?: { id: number; name: string; code: str
         </Field>
         <Field label={t("Fixed fee per deposit")}>
           <input name="feeFixed" className="input" inputMode="decimal" defaultValue={c?.feeFixed ?? 0} />
+        </Field>
+        <Field label={t("Withdrawal fee %")} hint={t("Of each withdrawal, taken when it is paid")}>
+          <input name="wdFeePercent" className="input" inputMode="decimal" defaultValue={c?.wdFeePercent ?? 0} />
         </Field>
         <Field label={t("Currency")}>
           <input name="currency" className="input uppercase" defaultValue={c?.currency ?? base} maxLength={5} />

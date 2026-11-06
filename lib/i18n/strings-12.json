@@ -147,5 +147,9 @@
 ["Player profile", "玩家资料", "Profil pemain"],
 ["Players this player referred on the platform (direct downlines only), with what they deposited and withdrew in these dates. Win/loss = deposits − withdrawals.", "这个玩家在平台上推荐的玩家（只算直属下线），以及他们在这段日期的充值和提款。净输赢 = 充值 − 提款。", "Pemain yang dirujuk oleh pemain ini di platform (downline langsung sahaja), dengan deposit dan pengeluaran mereka dalam tarikh ini. Menang/kalah = deposit − pengeluaran."],
 ["Registered", "注册时间", "Didaftarkan"],
-["This player isn't linked to the platform yet.", "这个玩家还没有和平台对上。", "Pemain ini belum dipautkan ke platform."]
+["This player isn't linked to the platform yet.", "这个玩家还没有和平台对上。", "Pemain ini belum dipautkan ke platform."],
+["Withdrawal fee %", "提款手续费 %", "Biaya penarikan %"],
+["Of each withdrawal, taken when it is paid", "按每笔提款，付款时扣", "Dari setiap penarikan, dipotong saat dibayar"],
+["Withdrawal fees (fee rate × withdrawals)", "提款手续费（费率 × 提款）", "Biaya penarikan (tarif × penarikan)"],
+["withdrawal fee", "提款手续费", "biaya penarikan"]
 ]
