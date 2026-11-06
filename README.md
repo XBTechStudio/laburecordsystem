@@ -97,7 +97,7 @@ node scripts/i18n-keys.mjs
 - 正式环境里系统每 15 分钟自动读取今天的对账单（凌晨 6 点前也补读昨天的）。本机开发不会自动读，用页面上的“立即读取”。不想自动读时，在 `.env` 加 `STATEMENT_SYNC=off`。
 - 配对规则：金额完全相同、时间相差不超过 N 分钟（系统设置 → 优惠与对账，默认 30）算同一笔；金额相同时，对账单上的名字和玩家真名一致的优先。对账单上付出又退回的两笔会互相抵消。
 - Excel 导入时如果勾选“只取第一个词”当账号，后面的真名会自动存进玩家姓名，用来配对名字。
-- 目前支持的对账单格式：xtechmail 的 Bill 页（`/g/…`，按 `?d=日期` 换天）。其他格式的页面需要另外加读取方式。
+- 目前支持的对账单格式：xtechmail 的 Bill 页（`/g/…`，按 `?d=日期` 换天）；PayBox 的 merchant-summary 页（`app-aibot.testhub199.com/merchant-summary/…`，有付款人名字）；MiMiPay 的 Telegram 记账账单（`jzusdt.github.io/botWeb/?id=…`，负数金额算出款）。其他格式的页面需要另外加读取方式。
 
 ## 权限
 

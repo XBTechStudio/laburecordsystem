@@ -1,12 +1,13 @@
 import "server-only";
 
 import { UserError } from "@/lib/action";
-import { addDays, dateOnly, dayStart } from "@/lib/dates";
+import { addDays, dateOnly, dayStart, todayStr } from "@/lib/dates";
 import { prisma } from "@/lib/db";
 import { n } from "@/lib/format";
 import { tk } from "@/lib/i18n";
 import { matchDay, withTimes, type DayMatch, type SysTxn } from "@/lib/statement-match";
 import { parseStatement, type ParsedStatement, type StatementLine } from "@/lib/statement-parse";
+import { apiSource, readMimiPay, readPayBox } from "@/lib/statement-sources";
 
 /** Problems reading a page. Kept on the account in English and translated where shown. */
 class StatementError extends Error {}
@@ -31,6 +32,17 @@ export function checkStatementUrl(raw: string) {
 
 /** One day of the statement page, or null when the page has nothing for that day. */
 async function readStatement(url: string, day: string): Promise<ParsedStatement | null> {
+  // PayBox and MiMiPay pages load their data from an API; read that directly.
+  const api = apiSource(url);
+  if (api) {
+    try {
+      const p = api === "paybox" ? await readPayBox(url, day, todayStr()) : await readMimiPay(url, day);
+      return p && (p.lines.length || p.totalIn || p.totalOut) ? p : null;
+    } catch (e) {
+      console.error("statement api", api, e);
+      throw new StatementError(tk("The statement page didn't answer properly. It will be tried again."));
+    }
+  }
   const u = new URL(url);
   u.searchParams.set("d", day);
   u.searchParams.set("from", "0");
