@@ -269,6 +269,8 @@ model PayChannel {
   /// Balance tracking starts here; null = from the very first transaction.
   openingAt       DateTime?
   active          Boolean     @default(true)
+  /// When it was stopped; a transaction after this starts it again (see lib/channels.ts).
+  deactivatedAt   DateTime?
   /// The PG's or agent's own daily statement page; the system reads it and matches it line by line.
   statementUrl    String?     @db.VarChar(300)
   /// Last attempt to read the statement page, and what went wrong (null = it worked).

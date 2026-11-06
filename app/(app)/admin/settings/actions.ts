@@ -6,6 +6,7 @@ import { audit } from "@/lib/audit";
 import { amount, int, need, run, str, type Result } from "@/lib/action";
 import { prisma } from "@/lib/db";
 import { getSettings, saveSetting, type Settings } from "@/lib/settings";
+import { IDLE_DAYS, idleChannels } from "@/lib/channels";
 
 const num = (fd: FormData, k: string) => amount(str(fd, k));
 
@@ -150,9 +151,23 @@ export async function toggleChannel(_p: Result, fd: FormData) {
     const user = await guard("settings", 3);
     const id = int(fd, "id");
     const c = await prisma.payChannel.findUniqueOrThrow({ where: { id } });
-    await prisma.payChannel.update({ where: { id }, data: { active: !c.active } });
+    await prisma.payChannel.update({ where: { id }, data: { active: !c.active, deactivatedAt: c.active ? new Date() : null } });
     await audit(user, "UPDATE", "PayChannel", id, null, `${c.active ? "Deactivated" : "Reactivated"} channel ${c.name}`);
     revalidatePath("/admin/settings");
+  });
+}
+
+/** Stop every active account with no transaction in the last N days; each starts again on its next transaction. */
+export async function stopIdleChannels(_p: Result, fd: FormData) {
+  return run(async () => {
+    const user = await guard("settings", 3);
+    const days = int(fd, "days");
+    need((IDLE_DAYS as readonly number[]).includes(days), "Choose how many days.");
+    const ids = (await idleChannels(days)).map((c) => c.id);
+    if (ids.length) await prisma.payChannel.updateMany({ where: { id: { in: ids }, active: true }, data: { active: false, deactivatedAt: new Date() } });
+    await audit(user, "UPDATE", "PayChannel", null, null, `Stopped ${ids.length} accounts with no transactions in ${days} days`, { ids });
+    revalidatePath("/admin/settings");
+    revalidatePath("/reconcile");
   });
 }
 

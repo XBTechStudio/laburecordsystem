@@ -10,6 +10,7 @@ import { tk } from "@/lib/i18n";
 import { MOVE_LABEL, moveDetail } from "@/lib/move-kinds";
 import { getT } from "@/lib/i18n-server";
 import { getSettings } from "@/lib/settings";
+import { reviveChannels } from "@/lib/channels";
 import { deleteCheck, deleteMove } from "./actions";
 import { BalanceForm, MoveForm, ResolveForm, TransferForm } from "./forms";
 import { ExchangeForm } from "./exchange-form";
@@ -26,6 +27,7 @@ export default async function ReconcilePage() {
   const full = can(user, "reconcile", 3);
   const tol = settings.reconTolerance;
 
+  await reviveChannels();
   const accounts = await prisma.payChannel.findMany({ where: { active: true }, orderBy: [{ type: "asc" }, { name: "asc" }] });
   const ids = accounts.map((a) => a.id);
   const [balances, lastChecks, today, checks, moves] = await Promise.all([

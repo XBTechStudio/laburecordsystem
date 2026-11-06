@@ -3,12 +3,13 @@ import { ActionButton, ActionForm, Dialog, Submit } from "@/components/client";
 import { Card, Chip, Field, PageHeader, TableWrap, Tabs } from "@/components/ui";
 import { can, requirePage } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { n } from "@/lib/format";
+import { dt, n } from "@/lib/format";
 import { levelOf, type Perms } from "@/lib/perms";
 import { tk, type T } from "@/lib/i18n";
 import { getT } from "@/lib/i18n-server";
 import { getSettings } from "@/lib/settings";
-import { saveAlerts, saveChannel, saveFollowUp, saveGeneral, saveRules, saveTiers, toggleChannel } from "./actions";
+import { IDLE_DAYS, idleChannels, reviveChannels } from "@/lib/channels";
+import { saveAlerts, saveChannel, saveFollowUp, saveGeneral, saveRules, saveTiers, stopIdleChannels, toggleChannel } from "./actions";
 import { TierEditor } from "./tier-editor";
 
 const TABS = [
@@ -34,14 +35,25 @@ function Check({ name, label, hint, on, disabled }: { name: string; label: strin
   );
 }
 
-export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ tab?: string; idle?: string }> }) {
   const user = await requirePage("settings");
   const ro = !can(user, "settings", 3);
-  const want = (await searchParams).tab;
+  const sp = await searchParams;
+  const want = sp.tab;
+  const idleDays = IDLE_DAYS.find((d) => String(d) === sp.idle) ?? 30;
   const tab = TABS.find(([k]) => k === want)?.[0] ?? "general";
   const [s, t] = await Promise.all([getSettings(), getT()]);
   const roles = tab === "alerts" ? await prisma.role.findMany({ orderBy: { name: "asc" } }) : [];
-  const channels = tab === "channels" ? await prisma.payChannel.findMany({ orderBy: [{ active: "desc" }, { type: "asc" }, { name: "asc" }] }) : [];
+  if (tab === "channels") await reviveChannels();
+  const [channels, idle, lastTxn] =
+    tab === "channels"
+      ? await Promise.all([
+          prisma.payChannel.findMany({ orderBy: [{ active: "desc" }, { type: "asc" }, { name: "asc" }] }),
+          idleChannels(idleDays),
+          prisma.txn.groupBy({ by: ["channelId"], _max: { txnAt: true } }),
+        ])
+      : [[], [], []];
+  const lastAt = new Map(lastTxn.map((r) => [r.channelId, r._max.txnAt]));
   const save = (label = t("Save")) => !ro && <Submit>{label}</Submit>;
 
   return (
@@ -240,6 +252,41 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             )
           }
         >
+          {!ro && (
+            <div className="space-y-2 border-b border-line px-4 py-3 text-sm">
+              <div className="flex flex-wrap items-center gap-2">
+                <span>{t("No transactions in the last")}</span>
+                {IDLE_DAYS.map((d) => (
+                  <Link key={d} href={`/admin/settings?tab=channels&idle=${d}`} className={`btn btn-sm ${d === idleDays ? "btn-primary" : ""}`}>
+                    {t("{n} days", { n: d })}
+                  </Link>
+                ))}
+                <span className="text-ink-2">· {t("{n} active accounts", { n: idle.length })}</span>
+                {idle.length > 0 && (
+                  <ActionButton
+                    action={stopIdleChannels}
+                    fields={{ days: idleDays }}
+                    question={t("Stop these {n} accounts? They leave reconciliation, keep all their records, and start again by themselves on their next transaction.", { n: idle.length })}
+                  >
+                    {t("Stop them all")}
+                  </ActionButton>
+                )}
+              </div>
+              {idle.length > 0 && (
+                <details>
+                  <summary className="cursor-pointer text-xs text-ink-2">{t("Show which accounts")}</summary>
+                  <ul className="mt-2 grid gap-x-4 gap-y-0.5 text-xs sm:grid-cols-2 lg:grid-cols-3">
+                    {idle.map((c) => (
+                      <li key={c.id}>
+                        {c.name} <span className="text-muted">· {c.last ? dt(c.last) : t("never used")}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+              <p className="text-xs text-muted">{t("A stopped account starts again by itself when a new transaction comes in through it.")}</p>
+            </div>
+          )}
           <TableWrap>
             <table className="tbl">
               <thead>
@@ -251,6 +298,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                   <th className="r">{t("Fee %")}</th>
                   <th className="r">{t("Fixed fee / txn")}</th>
                   <th className="r">{t("Withdrawal fee %")}</th>
+                  <th>{t("Last transaction")}</th>
                   <th>{t("Status")}</th>
                   {!ro && <th />}
                 </tr>
@@ -265,6 +313,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                     <td className="r">{n(c.feePercent)}%</td>
                     <td className="r">{n(c.feeFixed).toFixed(2)}</td>
                     <td className="r">{n(c.wdFeePercent)}%</td>
+                    <td className="text-ink-2">{dt(lastAt.get(c.id))}</td>
                     <td>{c.active ? <Chip tone="good">{t("Active")}</Chip> : <Chip>{t("Inactive")}</Chip>}</td>
                     {!ro && (
                       <td className="r space-x-1">
@@ -280,7 +329,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 ))}
                 {channels.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="py-8 text-center text-ink-2">
+                    <td colSpan={10} className="py-8 text-center text-ink-2">
                       {t("No channels yet. Add each payment gateway and bank account you use.")}
                     </td>
                   </tr>

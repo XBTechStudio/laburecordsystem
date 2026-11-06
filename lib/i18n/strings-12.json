@@ -151,5 +151,15 @@
 ["Withdrawal fee %", "提款手续费 %", "Biaya penarikan %"],
 ["Of each withdrawal, taken when it is paid", "按每笔提款，付款时扣", "Dari setiap penarikan, dipotong saat dibayar"],
 ["Withdrawal fees (fee rate × withdrawals)", "提款手续费（费率 × 提款）", "Biaya penarikan (tarif × penarikan)"],
-["withdrawal fee", "提款手续费", "biaya penarikan"]
+["withdrawal fee", "提款手续费", "biaya penarikan"],
+["No transactions in the last", "最近没有交易：", "Tidak ada transaksi dalam"],
+["{n} days", "{n} 天", "{n} hari"],
+["{n} active accounts", "{n} 个启用中的账户", "{n} akun aktif"],
+["Stop these {n} accounts? They leave reconciliation, keep all their records, and start again by themselves on their next transaction.", "停用这 {n} 个账户？它们会离开对账页，记录全部保留，有新交易进来时会自动重新启用。", "Hentikan {n} akun ini? Akun keluar dari rekonsiliasi, semua catatannya tetap ada, dan aktif lagi sendiri saat ada transaksi baru."],
+["Stop them all", "全部停用", "Hentikan semua"],
+["Show which accounts", "查看是哪些账户", "Lihat akun mana saja"],
+["never used", "从没用过", "belum pernah dipakai"],
+["A stopped account starts again by itself when a new transaction comes in through it.", "停用的账户有新交易进来时，会自动重新启用。", "Akun yang dihentikan aktif lagi sendiri saat ada transaksi baru masuk melaluinya."],
+["Last transaction", "最后交易", "Transaksi terakhir"],
+["Choose how many days.", "请选择天数。", "Pilih berapa hari."]
 ]
