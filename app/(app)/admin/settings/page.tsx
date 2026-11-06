@@ -9,7 +9,8 @@ import { tk, type T } from "@/lib/i18n";
 import { getT } from "@/lib/i18n-server";
 import { getSettings } from "@/lib/settings";
 import { IDLE_DAYS, idleChannels, reviveChannels } from "@/lib/channels";
-import { saveAlerts, saveChannel, saveFollowUp, saveGeneral, saveRules, saveTiers, stopIdleChannels, toggleChannel } from "./actions";
+import { bankGroupsText } from "@/lib/bank-groups";
+import { saveAlerts, saveBankGroups, saveChannel, saveFollowUp, saveGeneral, saveRules, saveTiers, stopIdleChannels, toggleChannel } from "./actions";
 import { TierEditor } from "./tier-editor";
 
 const TABS = [
@@ -252,6 +253,17 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             )
           }
         >
+          {!ro && (
+            <ActionForm action={saveBankGroups} className="space-y-2 border-b border-line px-4 py-3 text-sm">
+              <Field
+                label={t("Offline bank agents")}
+                hint={t("One agent per line: NAME = codes. A bank from the platform whose remark starts with one of the codes goes into that agent's one account, for all brands. Saving also moves the matching accounts there now, with their transactions.")}
+              >
+                <textarea name="groups" className="input min-h-28 font-mono text-xs" defaultValue={bankGroupsText(s.bankGroups)} />
+              </Field>
+              <div className="flex justify-end">{save()}</div>
+            </ActionForm>
+          )}
           {!ro && (
             <div className="space-y-2 border-b border-line px-4 py-3 text-sm">
               <div className="flex flex-wrap items-center gap-2">

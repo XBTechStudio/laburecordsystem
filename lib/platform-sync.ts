@@ -3,6 +3,8 @@ import "server-only";
 import type { PlatformLink, Prisma } from "@prisma/client";
 import { audit } from "@/lib/audit";
 import { prisma } from "@/lib/db";
+import { groupFor } from "@/lib/bank-groups";
+import { getSettings } from "@/lib/settings";
 import { addDays } from "@/lib/dates";
 import { phoneKey } from "@/lib/format";
 import {
@@ -143,7 +145,9 @@ export async function resolvePlayers(brandId: number, users: PlatformUser[]) {
 async function channelFor(link: PlatformLink & { brand: { name: string; currency: string } }, map: ChannelMap, key: string, label: string) {
   const hit = map[key];
   if (hit && (checked.has(hit.id) || (await prisma.payChannel.count({ where: { id: hit.id } })))) return checked.add(hit.id), hit.id;
-  const name = `${link.brand.name} · ${label}`.slice(0, 80);
+  // An offline bank of an agent (X Group, Mimi Pay…) goes into the agent's one account for all brands.
+  const group = key.startsWith("bank:") ? groupFor(label, (await getSettings()).bankGroups) : null;
+  const name = (group ?? `${link.brand.name} · ${label}`).slice(0, 80);
   const c = await prisma.payChannel.upsert({ where: { name }, create: { name, type: key.startsWith("bank:") ? "BANK" : "PG", currency: link.brand.currency }, update: {} });
   map[key] = { id: c.id, label };
   return c.id;

@@ -4,6 +4,7 @@ import { cache } from "react";
 import { prisma } from "@/lib/db";
 
 import type { TierRule } from "@/lib/tiers";
+import { DEFAULT_BANK_GROUPS, type BankGroup } from "@/lib/bank-groups";
 export type { TierRule } from "@/lib/tiers";
 
 export type Settings = {
@@ -65,6 +66,8 @@ export type Settings = {
   statementMinutes: number;
   /** Data entry form. pickTime off = deposits, withdrawals and claims always get the time they are saved. carryBrand = a brand picked on a row fills the empty rows below. enterSaves = Enter saves the form (off = Enter goes to the next row). */
   entry: { pickTime: boolean; carryBrand: boolean; enterSaves: boolean };
+  /** Offline bank agents: platform banks whose remark starts with a code become one account per agent, for all brands. */
+  bankGroups: BankGroup[];
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -99,6 +102,7 @@ export const DEFAULT_SETTINGS: Settings = {
   selfFixMinutes: 0,
   statementMinutes: 30,
   entry: { pickTime: false, carryBrand: false, enterSaves: true },
+  bankGroups: DEFAULT_BANK_GROUPS,
 };
 
 export const getSettings = cache(async (): Promise<Settings> => {

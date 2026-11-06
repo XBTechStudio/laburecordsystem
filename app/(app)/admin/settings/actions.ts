@@ -7,6 +7,7 @@ import { amount, int, need, run, str, type Result } from "@/lib/action";
 import { prisma } from "@/lib/db";
 import { getSettings, saveSetting, type Settings } from "@/lib/settings";
 import { IDLE_DAYS, idleChannels } from "@/lib/channels";
+import { applyBankGroups, parseBankGroups } from "@/lib/bank-groups";
 
 const num = (fd: FormData, k: string) => amount(str(fd, k));
 
@@ -168,6 +169,19 @@ export async function stopIdleChannels(_p: Result, fd: FormData) {
     await audit(user, "UPDATE", "PayChannel", null, null, `Stopped ${ids.length} accounts with no transactions in ${days} days`, { ids });
     revalidatePath("/admin/settings");
     revalidatePath("/reconcile");
+  });
+}
+
+/** Save the offline bank agents and move every matching bank account into its agent's account. */
+export async function saveBankGroups(_p: Result, fd: FormData) {
+  return run(async () => {
+    const user = await guard("settings", 3);
+    const groups = parseBankGroups(str(fd, "groups"));
+    need(groups.length || !str(fd, "groups").trim(), "Write one agent per line, like: X GROUP = X GROUP, XGP");
+    await save("bankGroups", groups, "bank agents");
+    const moved = await applyBankGroups(groups);
+    await audit(user, "UPDATE", "PayChannel", null, null, "Grouped bank accounts by agent", moved);
+    revalidatePath("/", "layout");
   });
 }
 
