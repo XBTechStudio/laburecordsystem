@@ -28,7 +28,10 @@ export default async function ReconcilePage() {
   const tol = settings.reconTolerance;
 
   await reviveChannels();
-  const accounts = await prisma.payChannel.findMany({ where: { active: true }, orderBy: [{ type: "asc" }, { name: "asc" }] });
+  // Accounts with a short code (01, 02…) come first in that order; the rest follow by type and name.
+  const accounts = (await prisma.payChannel.findMany({ where: { active: true }, orderBy: [{ type: "asc" }, { name: "asc" }] })).sort((a, b) =>
+    a.code && b.code ? a.code.localeCompare(b.code, undefined, { numeric: true }) : a.code ? -1 : b.code ? 1 : 0,
+  );
   const ids = accounts.map((a) => a.id);
   const [balances, lastChecks, today, checks, moves] = await Promise.all([
     expectedBalances(new Date(), ids),
@@ -133,6 +136,7 @@ export default async function ReconcilePage() {
                       <tr key={a.id}>
                         <td>
                           <Link href={`/reconcile/${a.id}`} className="font-medium hover:underline">
+                            {a.code && <span className="mr-1.5 text-muted tabular-nums">{a.code}</span>}
                             {a.name}
                           </Link>
                           <div className="text-xs text-muted">

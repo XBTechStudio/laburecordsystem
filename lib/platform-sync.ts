@@ -143,10 +143,12 @@ export async function resolvePlayers(brandId: number, users: PlatformUser[]) {
 
 /** Which of our accounts a platform bank / payment method stands for; new ones get an account named "<brand> · <label>". */
 async function channelFor(link: PlatformLink & { brand: { name: string; currency: string } }, map: ChannelMap, key: string, label: string) {
-  const hit = map[key];
-  if (hit && (checked.has(hit.id) || (await prisma.payChannel.count({ where: { id: hit.id } })))) return checked.add(hit.id), hit.id;
   // An offline bank of an agent (X Group, Mimi Pay…) goes into the agent's one account for all brands.
-  const group = key.startsWith("bank:") ? groupFor(label, (await getSettings()).bankGroups) : null;
+  const group = key.startsWith("bank:") ? groupFor(label, await bankGroups()) : null;
+  const hit = map[key];
+  // A remark added or changed on the platform later (label differs) moves the bank into its agent from then on.
+  const moved = group && hit && hit.label !== label;
+  if (hit && !moved && (checked.has(hit.id) || (await prisma.payChannel.count({ where: { id: hit.id } })))) return checked.add(hit.id), hit.id;
   const name = (group ?? `${link.brand.name} · ${label}`).slice(0, 80);
   const c = await prisma.payChannel.upsert({ where: { name }, create: { name, type: key.startsWith("bank:") ? "BANK" : "PG", currency: link.brand.currency }, update: {} });
   map[key] = { id: c.id, label };
@@ -154,6 +156,13 @@ async function channelFor(link: PlatformLink & { brand: { name: string; currency
 }
 
 const checked = new Set<number>();
+
+let groupsCache: { at: number; groups: Awaited<ReturnType<typeof getSettings>>["bankGroups"] } | null = null;
+/** The agent list, read at most once a minute (this runs for every synced transaction). */
+async function bankGroups() {
+  if (!groupsCache || Date.now() - groupsCache.at > 60_000) groupsCache = { at: Date.now(), groups: (await getSettings()).bankGroups };
+  return groupsCache.groups;
+}
 
 /** "bank:<id>" for the platform's own bank accounts, "m:<method>" for payment gateways. Withdrawals without a bank aren't tied to an account. */
 function sourceOf(t: PlatformTxn, d: Record<string, unknown>) {

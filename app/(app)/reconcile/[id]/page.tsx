@@ -127,6 +127,9 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
                 <Field label={t("Currency")}>
                   <input name="currency" className="input uppercase" defaultValue={acc.currency} maxLength={5} />
                 </Field>
+                <Field label={t("Short code")} hint={t("Sets the order on the reconciliation page (01 first, then 02…), and can be typed on the entry form instead of the name.")}>
+                  <input name="code" className="input" defaultValue={acc.code ?? ""} maxLength={20} placeholder={t("optional")} />
+                </Field>
                 <Field label={t("Fee %")} hint={t("Of each deposit")}>
                   <input name="feePercent" className="input" inputMode="decimal" defaultValue={n(acc.feePercent)} />
                 </Field>

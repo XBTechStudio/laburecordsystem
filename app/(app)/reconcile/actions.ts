@@ -206,6 +206,8 @@ export async function setOpening(_p: Result, fd: FormData) {
     need(feePercent >= 0 && feeFixed >= 0 && wdFeePercent >= 0, "Fees can't be negative.");
     need(/^[A-Z]{3,5}$/.test(currency), "Currency should be a code like MYR, AUD or USDT.");
     const statementUrl = str(fd, "statementUrl") ? checkStatementUrl(str(fd, "statementUrl")) : null;
+    const code = str(fd, "code").slice(0, 20) || null;
+    if (code) need(!(await prisma.payChannel.findFirst({ where: { code, id: { not: id } } })), "Another PG / bank already uses this code.");
     const before = await prisma.payChannel.findUniqueOrThrow({ where: { id } });
     const newLink = statementUrl !== before.statementUrl;
     await prisma.payChannel.update({
@@ -216,6 +218,7 @@ export async function setOpening(_p: Result, fd: FormData) {
         feePercent,
         feeFixed,
         wdFeePercent,
+        code,
         currency,
         type: str(fd, "type") === "PG" ? "PG" : "BANK",
         feeAtSettlement: fd.get("feeAtSettlement") === "on",
