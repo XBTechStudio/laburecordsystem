@@ -61,7 +61,7 @@ export function TransferForm({ accounts, t }: { accounts: Acc[]; t: T }) {
         <Field label={t("Amount")}>
           <input name="amount" className="input" inputMode="decimal" required />
         </Field>
-        <Field label={t("Transfer / settlement fee")} hint={t("Taken from the sending account; from a PG it is booked as a settlement fee")}>
+        <Field label={t("Transfer / settlement fee")} hint={t("Leave empty to use the account's settlement fee. Taken from the sending account; from a PG it is booked as a settlement fee.")}>
           <input name="fee" className="input" inputMode="decimal" placeholder="0" />
         </Field>
         <Field label={t("When")} hint={t("Leave empty for now")}>

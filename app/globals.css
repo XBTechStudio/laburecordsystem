@@ -240,3 +240,62 @@ body {
     @apply inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium whitespace-nowrap;
   }
 }
+
+/* Daily statement: navy header like an agent's statement, green in, red out, blue net. */
+.statement-head,
+.statement-table thead th,
+.statement-table tfoot td {
+  background: #0c1b3a;
+  color: #fff;
+}
+.statement-table thead th {
+  border-bottom-color: transparent;
+}
+.statement-table tfoot td {
+  border-top: 0;
+  border-bottom: 0;
+}
+.statement-table .in {
+  color: var(--good-ink);
+}
+.statement-table .out {
+  color: var(--critical-ink);
+}
+.statement-table .net {
+  color: var(--brand-ink);
+}
+.statement-table tfoot .in {
+  color: #7dffa2;
+}
+.statement-table tfoot .out {
+  color: #ff8d8d;
+}
+.statement-table tfoot .net {
+  color: #9cc4ff;
+}
+
+@media print {
+  aside,
+  header {
+    display: none !important;
+  }
+  main {
+    padding: 0 !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .statement {
+    overflow: visible !important;
+    border: 0 !important;
+  }
+  .statement-table {
+    font-size: 9px;
+  }
+  .statement-head,
+  .statement-table thead th,
+  .statement-table tfoot td {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

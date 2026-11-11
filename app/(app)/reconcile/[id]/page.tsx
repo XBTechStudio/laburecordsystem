@@ -12,6 +12,8 @@ import { getT } from "@/lib/i18n-server";
 import { getSettings } from "@/lib/settings";
 import { setOpening } from "../actions";
 import { MOVE_LABEL, moveDetail } from "@/lib/move-kinds";
+import { isPg, TYPE_LABEL } from "@/lib/channel-type";
+import { ChannelFeeFields } from "@/components/channel-fees";
 import { ExchangeForm } from "../exchange-form";
 import { BalanceForm, MoveForm } from "../forms";
 
@@ -52,8 +54,15 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
           </Link>
           <h1 className="mt-1 text-xl font-semibold">{acc.name}</h1>
           <p className="text-sm text-ink-2">
-            {acc.type === "PG" ? t("Payment gateway") : t("Bank")} · {cur} · {t("fee")} {n(acc.feePercent)}% + {n(acc.feeFixed).toFixed(2)}
-            {n(acc.wdFeePercent) > 0 && ` · ${t("withdrawal fee")} ${n(acc.wdFeePercent)}%`}
+            {t(TYPE_LABEL[acc.type] ?? acc.type)} · {cur}
+            {isPg(acc.type) && (
+              <>
+                {" · "}
+                {t("fee")} {n(acc.feePercent)}% + {n(acc.feeFixed).toFixed(2)}
+                {n(acc.wdFeePercent) > 0 && ` · ${t("withdrawal fee")} ${n(acc.wdFeePercent)}%`}
+                {(n(acc.settleFeePercent) > 0 || n(acc.settleFeeFixed) > 0) && ` · ${t("settlement fee")} ${n(acc.settleFeePercent)}% + ${n(acc.settleFeeFixed).toFixed(2)}`}
+              </>
+            )}
           </p>
           {settleFees._count > 0 && (
             <p className="text-sm text-ink-2">
@@ -65,8 +74,12 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
           <div className="text-xs text-ink-2">{t("System balance now")}</div>
           <div className="text-2xl font-semibold">{money(now?.expected ?? 0, cur)}</div>
         </div>
-        {canAdd && (
-          <div className="flex gap-2">
+        <div className="flex gap-2">
+          <Link href={`/reconcile/${acc.id}/statement`} className="btn">
+            {t("Daily statement")}
+          </Link>
+          {canAdd && (
+            <>
             {acc.statementUrl && (
               <Link href={`/reconcile/statements/${acc.id}`} className="btn">
                 {t("Statement match")}
@@ -81,8 +94,9 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
             <Dialog label={"+ " + t("Other movement")} title={t("Money in or out of an account")}>
               <MoveForm accounts={accounts} t={t} allowAdjust={full} channelId={acc.id} />
             </Dialog>
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
@@ -117,36 +131,23 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
           {full ? (
             <ActionForm action={setOpening} className="space-y-3">
               <input type="hidden" name="channelId" value={acc.id} />
+              <ChannelFeeFields
+                type={acc.type}
+                feePercent={n(acc.feePercent)}
+                feeFixed={n(acc.feeFixed)}
+                wdFeePercent={n(acc.wdFeePercent)}
+                settleFeePercent={n(acc.settleFeePercent)}
+                settleFeeFixed={n(acc.settleFeeFixed)}
+                feeAtSettlement={acc.feeAtSettlement}
+              />
               <div className="grid grid-cols-2 gap-3">
-                <Field label={t("Type")}>
-                  <select name="type" className="input" defaultValue={acc.type}>
-                    <option value="PG">{t("Payment gateway")}</option>
-                    <option value="BANK">{t("Bank account")}</option>
-                  </select>
-                </Field>
                 <Field label={t("Currency")}>
                   <input name="currency" className="input uppercase" defaultValue={acc.currency} maxLength={5} />
                 </Field>
                 <Field label={t("Short code")} hint={t("Sets the order on the reconciliation page (01 first, then 02…), and can be typed on the entry form instead of the name.")}>
                   <input name="code" className="input" defaultValue={acc.code ?? ""} maxLength={20} placeholder={t("optional")} />
                 </Field>
-                <Field label={t("Fee %")} hint={t("Of each deposit")}>
-                  <input name="feePercent" className="input" inputMode="decimal" defaultValue={n(acc.feePercent)} />
-                </Field>
-                <Field label={t("Fixed fee per deposit")}>
-                  <input name="feeFixed" className="input" inputMode="decimal" defaultValue={n(acc.feeFixed)} />
-                </Field>
-                <Field label={t("Withdrawal fee %")} hint={t("Of each withdrawal, taken when it is paid")}>
-                  <input name="wdFeePercent" className="input" inputMode="decimal" defaultValue={n(acc.wdFeePercent)} />
-                </Field>
               </div>
-              <label className="flex items-start gap-2 text-sm">
-                <input type="checkbox" name="feeAtSettlement" defaultChecked={acc.feeAtSettlement} className="mt-0.5 h-4 w-4 accent-[var(--brand)]" />
-                <span>
-                  {t("Fee is taken when the PG pays out")}
-                  <span className="block text-xs text-muted">{t("Tick this if the PG balance goes up by the full deposit. Record the fee in “Transfer / settlement fee” when you record the settlement.")}</span>
-                </span>
-              </label>
               <Field label={t("Starting balance ({cur})", { cur })}>
                 <input name="openingBalance" className="input" inputMode="decimal" defaultValue={n(acc.openingBalance)} />
               </Field>

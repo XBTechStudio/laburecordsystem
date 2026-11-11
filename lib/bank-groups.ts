@@ -56,7 +56,7 @@ export async function applyBankGroups(groups: BankGroup[]) {
   const target = new Map<number, number>();
   for (const [name, ids] of plan) {
     const currency = banks.find((b) => b.id === ids[0])!.currency;
-    const t = await prisma.payChannel.upsert({ where: { name }, create: { name, type: "BANK", currency }, update: { active: true, deactivatedAt: null } });
+    const t = await prisma.payChannel.upsert({ where: { name }, create: { name, type: "PG_OFFLINE", currency }, update: { active: true, deactivatedAt: null } });
     const [txns] = await prisma.$transaction([
       prisma.txn.updateMany({ where: { channelId: { in: ids } }, data: { channelId: t.id } }),
       prisma.channelMove.updateMany({ where: { channelId: { in: ids } }, data: { channelId: t.id } }),

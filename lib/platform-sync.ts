@@ -150,7 +150,11 @@ async function channelFor(link: PlatformLink & { brand: { name: string; currency
   const moved = group && hit && hit.label !== label;
   if (hit && !moved && (checked.has(hit.id) || (await prisma.payChannel.count({ where: { id: hit.id } })))) return checked.add(hit.id), hit.id;
   const name = (group ?? `${link.brand.name} · ${label}`).slice(0, 80);
-  const c = await prisma.payChannel.upsert({ where: { name }, create: { name, type: key.startsWith("bank:") ? "BANK" : "PG", currency: link.brand.currency }, update: {} });
+  const c = await prisma.payChannel.upsert({
+    where: { name },
+    create: { name, type: group ? "PG_OFFLINE" : key.startsWith("bank:") ? "BANK" : "PG", currency: link.brand.currency },
+    update: {},
+  });
   map[key] = { id: c.id, label };
   return c.id;
 }
@@ -331,14 +335,21 @@ async function dropUndone(link: PlatformLink, c: Creds, out: SyncResult, now: Da
     await audit(null, "DELETE", "Txn", t.id, link.brandId, `Platform ${undone.get(t.ref!)!.status.toLowerCase()} ${t.type.toLowerCase()} ${t.ref} of ${t.amount} for ${t.player.username} after it completed`, t);
 }
 
-/** Deposits, withdrawals and bonus claims, read up to six hours at a time from where the last run stopped. */
+/** Where each brand's hourly 48-hour re-read has got to, when it needs more than one run. */
+const deepFrom = new Map<number, Date>();
+
+/**
+ * Deposits, withdrawals and bonus claims, read up to six hours at a time from where the last run stopped. New ones are read
+ * first; the hourly re-read of the last 48 hours uses what is left of the run's pages and carries on in the next runs, so
+ * however busy a brand is, it never holds up new transactions.
+ */
 async function syncTxns(link: PlatformLink & { brand: { name: string; currency: string } }, c: Creds, out: SyncResult, map: ChannelMap) {
   const now = new Date();
-  const deep = !link.deepAt || now.getTime() - link.deepAt.getTime() > HOUR;
   // While catching up on old history nothing is still pending, so there is nothing to read again.
   const catchingUp = link.txnCursor && now.getTime() - link.txnCursor.getTime() > DEEP_LOOKBACK;
-  let from = link.txnCursor ? new Date(link.txnCursor.getTime() - (catchingUp ? 0 : deep ? DEEP_LOOKBACK : LOOKBACK)) : link.startAt;
+  let from = link.txnCursor ? new Date(link.txnCursor.getTime() - (catchingUp ? 0 : LOOKBACK)) : link.startAt;
   if (from < link.startAt) from = link.startAt;
+  const recentFrom = from;
   let cursor = link.txnCursor;
   // Only the types we keep. Forfeits (cleared balances) are many, but needed to find bonuses cleared by mistake.
   const types = [...(link.syncTxns ? ["DEPOSIT", "WITHDRAW"] : []), ...(link.syncClaims ? ["BONUS", ...KEPT] : [])];
@@ -346,40 +357,55 @@ async function syncTxns(link: PlatformLink & { brand: { name: string; currency: 
     out.pages++;
     return getTransactions(c, { sDate: platformTime(from, link.timeZone), eDate: platformTime(to, link.timeZone), pageIndex, type });
   };
-  while (from < now) {
-    let to = new Date(Math.min(from.getTime() + WINDOW, now.getTime()));
-    // Each type's first page says how many pages the window has. A window too big for a whole run is halved
-    // (busy stretches can be thousands of rows an hour); one that only doesn't fit what this run has left waits for the next run.
-    let firsts: { type: string; page: Awaited<ReturnType<typeof getTransactions>> }[] = [];
-    for (;;) {
-      if (out.pages + types.length > PAGE_BUDGET) {
-        out.more = true;
-        break;
+  /** Reads from..until window by window, calling done(to) after each; false when the run's pages ran out first. */
+  const span = async (from: Date, until: Date, done: (to: Date) => unknown) => {
+    while (from < until) {
+      let to = new Date(Math.min(from.getTime() + WINDOW, until.getTime()));
+      // Each type's first page says how many pages the window has. A window too big for a whole run is halved
+      // (busy stretches can be thousands of rows an hour); one that only doesn't fit what this run has left waits for the next run.
+      let firsts: { type: string; page: Awaited<ReturnType<typeof getTransactions>> }[] = [];
+      for (;;) {
+        if (out.pages + types.length > PAGE_BUDGET) return false;
+        firsts = [];
+        for (const type of types) firsts.push({ type, page: await read(from, to, type, 0) });
+        const rest = firsts.reduce((n, f) => n + Math.max((f.page.totalPage || 0) - 1, 0), 0);
+        if (out.pages + rest <= PAGE_BUDGET) break;
+        if (rest > PAGE_BUDGET - 4 * types.length && to.getTime() - from.getTime() > 15 * 60_000) {
+          to = new Date(from.getTime() + (to.getTime() - from.getTime()) / 2);
+          continue;
+        }
+        return false;
       }
-      firsts = [];
-      for (const type of types) firsts.push({ type, page: await read(from, to, type, 0) });
-      const rest = firsts.reduce((n, f) => n + Math.max((f.page.totalPage || 0) - 1, 0), 0);
-      if (out.pages + rest <= PAGE_BUDGET) break;
-      if (rest > PAGE_BUDGET - 4 * types.length && to.getTime() - from.getTime() > 15 * 60_000) {
-        to = new Date(from.getTime() + (to.getTime() - from.getTime()) / 2);
-        continue;
+      const rows: PlatformTxn[] = [];
+      for (const { type, page } of firsts) {
+        rows.push(...(page.transactions ?? []));
+        for (let p = 1; p < (page.totalPage || 0); p++) rows.push(...((await read(from, to, type, p)).transactions ?? []));
       }
-      out.more = true;
-      break;
+      const r = await saveTxns(link, map, rows.filter((x) => new Date(x.createdDateTime) >= link.startAt));
+      out.txns += r.txns;
+      out.claims += r.claims;
+      out.players += r.players;
+      await done(to);
+      from = to;
     }
-    if (out.more) break;
-    const rows: PlatformTxn[] = [];
-    for (const { type, page } of firsts) {
-      rows.push(...(page.transactions ?? []));
-      for (let p = 1; p < (page.totalPage || 0); p++) rows.push(...((await read(from, to, type, p)).transactions ?? []));
-    }
-    const r = await saveTxns(link, map, rows.filter((x) => new Date(x.createdDateTime) >= link.startAt));
-    out.txns += r.txns;
-    out.claims += r.claims;
-    out.players += r.players;
+    return true;
+  };
+
+  // The cursor is saved after each window, so a run cut short (a platform timeout) keeps what it finished.
+  out.more = !(await span(from, now, async (to) => {
+    if (cursor && to <= cursor) return;
     cursor = to;
-    from = to;
+    await prisma.platformLink.update({ where: { id: link.id }, data: { txnCursor: to } });
+  }));
+  // Once an hour (after new ones are in), the last 48 hours are read again for transactions that completed late.
+  let deepDone = false;
+  if (!out.more && !catchingUp && link.txnCursor && (!link.deepAt || now.getTime() - link.deepAt.getTime() > HOUR)) {
+    const start = deepFrom.get(link.id) ?? new Date(Math.max(link.txnCursor.getTime() - DEEP_LOOKBACK, link.startAt.getTime()));
+    deepDone = await span(start, recentFrom, (to) => deepFrom.set(link.id, to));
+    if (deepDone) deepFrom.delete(link.id);
+    else out.more = true;
   }
+  const deep = deepDone;
   // Once after each start, the whole recent history is checked for bonuses cleared by mistake and given again.
   if (!out.more && link.syncClaims && !voidSwept.has(link.id)) {
     voidSwept.add(link.id);

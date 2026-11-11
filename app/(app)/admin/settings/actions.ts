@@ -8,6 +8,7 @@ import { prisma } from "@/lib/db";
 import { getSettings, saveSetting, type Settings } from "@/lib/settings";
 import { IDLE_DAYS, idleChannels } from "@/lib/channels";
 import { applyBankGroups, parseBankGroups } from "@/lib/bank-groups";
+import { channelType, isPg } from "@/lib/channel-type";
 
 const num = (fd: FormData, k: string) => amount(str(fd, k));
 
@@ -119,12 +120,16 @@ export async function saveChannel(_p: Result, fd: FormData) {
   return run(async () => {
     const user = await guard("settings", 3);
     const id = Number(str(fd, "id")) || null;
+    const type = channelType(str(fd, "type"));
+    const pg = isPg(type);
     const data = {
       name: str(fd, "name"),
-      type: str(fd, "type") === "BANK" ? ("BANK" as const) : ("PG" as const),
-      feePercent: num(fd, "feePercent") || 0,
-      feeFixed: num(fd, "feeFixed") || 0,
-      wdFeePercent: num(fd, "wdFeePercent") || 0,
+      type,
+      feePercent: pg ? num(fd, "feePercent") || 0 : 0,
+      feeFixed: pg ? num(fd, "feeFixed") || 0 : 0,
+      wdFeePercent: pg ? num(fd, "wdFeePercent") || 0 : 0,
+      settleFeePercent: pg ? num(fd, "settleFeePercent") || 0 : 0,
+      settleFeeFixed: pg ? num(fd, "settleFeeFixed") || 0 : 0,
       currency: (str(fd, "currency") || "MYR").toUpperCase(),
       code: str(fd, "code").slice(0, 20) || null,
     };
@@ -134,7 +139,7 @@ export async function saveChannel(_p: Result, fd: FormData) {
     }
     need(/^[A-Z]{3,5}$/.test(data.currency), "Currency should be a code like MYR, AUD or USDT.");
     need(data.name, "Please enter the channel name.");
-    need(data.feePercent >= 0 && data.feeFixed >= 0 && data.wdFeePercent >= 0, "Fees can't be negative.");
+    need(data.feePercent >= 0 && data.feeFixed >= 0 && data.wdFeePercent >= 0 && data.settleFeePercent >= 0 && data.settleFeeFixed >= 0, "Fees can't be negative.");
     if (id) {
       await prisma.payChannel.update({ where: { id }, data });
       await audit(user, "UPDATE", "PayChannel", id, null, `Edited channel ${data.name}`, data);

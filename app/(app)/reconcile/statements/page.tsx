@@ -8,6 +8,7 @@ import type { T } from "@/lib/i18n";
 import { getT } from "@/lib/i18n-server";
 import { getSettings } from "@/lib/settings";
 import { accountDays } from "@/lib/statements";
+import { TYPE_LABEL } from "@/lib/channel-type";
 import { DayPicker, pickDay, readAgo, ReconcileTabs, statementStatus } from "../parts";
 import { readStatementsNow } from "../statement-actions";
 
@@ -106,7 +107,7 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
                           {a.name}
                         </Link>
                         <div className="text-xs text-muted">
-                          {a.type === "PG" ? t("Payment gateway") : t("Bank")} · {cur}
+                          {t(TYPE_LABEL[a.type] ?? a.type)} · {cur}
                         </div>
                       </td>
                       <td className="r text-xs whitespace-nowrap">

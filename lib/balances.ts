@@ -61,8 +61,19 @@ export type LedgerDay = {
   depositCount: number;
   withdrawals: number;
   withdrawCount: number;
+  /** Deposit fee and withdrawal fee, kept apart so a statement can show each column. `fees` is the two added together. */
+  depositFee: number;
+  wdFee: number;
   fees: number;
+  /** Money moved in, apart from player deposits and from fees. */
+  settleIn: number;
+  /** Money moved out, as a positive number, apart from player withdrawals and from fees. */
+  settleOut: number;
+  /** Settlement fees and bank charges for the day, as a positive number. */
+  setFee: number;
   moves: number;
+  /** Notes written on that day's movements and balance checks. */
+  notes: string;
   closing: number;
   /** closing − opening: the day's net change, what PG pages show as "remaining" for the day. */
   change: number;
@@ -73,7 +84,7 @@ export async function ledger(channelId: number, r: Range): Promise<LedgerDay[]> 
   const t0 = dayStart(r.from);
   const t1 = dayStart(addDays(r.to, 1));
   const before = (await expectedBalances(new Date(t0.getTime() - 1), [channelId])).get(channelId)?.expected ?? 0;
-  const [txns, moves] = await Promise.all([
+  const [txns, moves, moveNotes, checkNotes] = await Promise.all([
     prisma.$queryRaw<{ d: string; type: string; amt: unknown; cnt: bigint; fee: unknown; wdFee: unknown }[]>`
       SELECT DATE_FORMAT(DATE_ADD(t.txnAt, INTERVAL 8 HOUR), '%Y-%m-%d') AS d, t.type, SUM(t.amount) AS amt, COUNT(*) AS cnt,
         SUM(CASE WHEN t.type = 'DEPOSIT' AND c.feeAtSettlement = 0 THEN t.amount * c.feePercent / 100 + c.feeFixed ELSE 0 END) AS fee,
@@ -81,18 +92,39 @@ export async function ledger(channelId: number, r: Range): Promise<LedgerDay[]> 
       FROM \`Txn\` t JOIN \`PayChannel\` c ON c.id = t.channelId
       WHERE t.channelId = ${channelId} AND t.txnAt >= ${t0} AND t.txnAt < ${t1} AND t.txnAt >= COALESCE(c.openingAt, ${EPOCH})
       GROUP BY d, t.type`,
-    prisma.$queryRaw<{ d: string; amt: unknown }[]>`
-      SELECT DATE_FORMAT(DATE_ADD(m.at, INTERVAL 8 HOUR), '%Y-%m-%d') AS d, SUM(m.amount) AS amt
+    prisma.$queryRaw<{ d: string; amt: unknown; settleIn: unknown; settleOut: unknown; setFee: unknown }[]>`
+      SELECT DATE_FORMAT(DATE_ADD(m.at, INTERVAL 8 HOUR), '%Y-%m-%d') AS d, SUM(m.amount) AS amt,
+        SUM(CASE WHEN m.kind IN ('SETTLE_FEE', 'FEE') THEN 0 WHEN m.amount > 0 THEN m.amount ELSE 0 END) AS settleIn,
+        SUM(CASE WHEN m.kind IN ('SETTLE_FEE', 'FEE') THEN 0 WHEN m.amount < 0 THEN -m.amount ELSE 0 END) AS settleOut,
+        SUM(CASE WHEN m.kind IN ('SETTLE_FEE', 'FEE') THEN -m.amount ELSE 0 END) AS setFee
       FROM \`ChannelMove\` m JOIN \`PayChannel\` c ON c.id = m.channelId
       WHERE m.channelId = ${channelId} AND m.at >= ${t0} AND m.at < ${t1} AND m.at >= COALESCE(c.openingAt, ${EPOCH})
       GROUP BY d`,
+    prisma.$queryRaw<{ d: string; note: string }[]>`
+      SELECT DATE_FORMAT(DATE_ADD(m.at, INTERVAL 8 HOUR), '%Y-%m-%d') AS d, m.note AS note
+      FROM \`ChannelMove\` m JOIN \`PayChannel\` c ON c.id = m.channelId
+      WHERE m.channelId = ${channelId} AND m.at >= ${t0} AND m.at < ${t1} AND m.at >= COALESCE(c.openingAt, ${EPOCH})
+        AND m.note IS NOT NULL AND m.note <> ''`,
+    prisma.$queryRaw<{ d: string; note: string }[]>`
+      SELECT DATE_FORMAT(DATE_ADD(b.at, INTERVAL 8 HOUR), '%Y-%m-%d') AS d, b.note AS note
+      FROM \`BalanceCheck\` b JOIN \`PayChannel\` c ON c.id = b.channelId
+      WHERE b.channelId = ${channelId} AND b.at >= ${t0} AND b.at < ${t1} AND b.at >= COALESCE(c.openingAt, ${EPOCH})
+        AND b.note IS NOT NULL AND b.note <> ''`,
   ]);
+  const noteOf = new Map<string, string[]>();
+  for (const row of [...moveNotes, ...checkNotes]) {
+    const list = noteOf.get(row.d) ?? [];
+    if (row.note && !list.includes(row.note)) list.push(row.note);
+    noteOf.set(row.d, list);
+  }
   const days: LedgerDay[] = [];
   let running = before;
   for (let d = r.from; d <= r.to; d = addDays(d, 1)) {
     const dep = txns.find((x) => x.d === d && x.type === "DEPOSIT");
     const wd = txns.find((x) => x.d === d && x.type === "WITHDRAW");
     const mv = moves.find((x) => x.d === d);
+    const depositFee = n(dep?.fee as number);
+    const wdFee = n(wd?.wdFee as number);
     const row: LedgerDay = {
       day: d,
       opening: running,
@@ -100,8 +132,14 @@ export async function ledger(channelId: number, r: Range): Promise<LedgerDay[]> 
       depositCount: Number(dep?.cnt ?? 0),
       withdrawals: n(wd?.amt as number),
       withdrawCount: Number(wd?.cnt ?? 0),
-      fees: n(dep?.fee as number) + n(wd?.wdFee as number),
+      depositFee,
+      wdFee,
+      fees: depositFee + wdFee,
+      settleIn: n(mv?.settleIn as number),
+      settleOut: n(mv?.settleOut as number),
+      setFee: n(mv?.setFee as number),
       moves: n(mv?.amt as number),
+      notes: (noteOf.get(d) ?? []).join(" · "),
       closing: 0,
       change: 0,
     };

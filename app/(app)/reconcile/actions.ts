@@ -13,6 +13,7 @@ import { money, n } from "@/lib/format";
 import { getT } from "@/lib/i18n-server";
 import { getSettings } from "@/lib/settings";
 import { LOAN_KINDS, LOAN_SIGN, type LoanKind } from "@/lib/move-kinds";
+import { channelType, isPg } from "@/lib/channel-type";
 import { checkStatementUrl, syncStatements } from "@/lib/statements";
 
 const TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
@@ -21,7 +22,10 @@ const when = (fd: FormData) => (TIME.test(str(fd, "time")) ? fromLocalInput(str(
 function refresh(channelId?: number) {
   revalidatePath("/reconcile");
   revalidatePath("/reconcile/loans");
-  if (channelId) revalidatePath(`/reconcile/${channelId}`);
+  if (channelId) {
+    revalidatePath(`/reconcile/${channelId}`);
+    revalidatePath(`/reconcile/${channelId}/statement`);
+  }
   revalidatePath("/");
 }
 
@@ -53,24 +57,27 @@ export async function recordTransfer(_p: Result, fd: FormData) {
     const from = int(fd, "from");
     const to = int(fd, "to");
     const amt = amount(str(fd, "amount"));
-    const fee = amount(str(fd, "fee") || "0");
     need(Number.isInteger(from) && Number.isInteger(to) && from !== to, "Choose two different accounts.");
     need(amt > 0, "Amount must be more than 0.");
-    need(fee >= 0, "Fees can't be negative.");
     const at = when(fd);
     const ref = randomBytes(8).toString("hex");
     const note = str(fd, "note") || null;
     const [a, b] = await Promise.all([prisma.payChannel.findUniqueOrThrow({ where: { id: from } }), prisma.payChannel.findUniqueOrThrow({ where: { id: to } })]);
+    // An empty fee box uses the sending PG's settlement fee. A number typed in is used as it is, including 0.
+    const typedFee = str(fd, "fee");
+    const fee = typedFee === "" && isPg(a.type) ? Math.round((amt * n(a.settleFeePercent) / 100 + n(a.settleFeeFixed)) * 100) / 100 : amount(typedFee || "0");
+    need(fee >= 0, "Fees can't be negative.");
     await prisma.channelMove.createMany({
       data: [
         { channelId: from, kind: "TRANSFER_OUT", amount: -amt, at, transferRef: ref, note, userName: user.name },
         { channelId: to, kind: "TRANSFER_IN", amount: amt, at, transferRef: ref, note, userName: user.name },
         // The fee is its own line, so settlement fees can be added up per account.
-        ...(fee > 0 ? [{ channelId: from, kind: (a.type === "PG" ? "SETTLE_FEE" : "FEE") as MoveKind, amount: -fee, at, transferRef: ref, note, userName: user.name }] : []),
+        ...(fee > 0 ? [{ channelId: from, kind: (isPg(a.type) ? "SETTLE_FEE" : "FEE") as MoveKind, amount: -fee, at, transferRef: ref, note, userName: user.name }] : []),
       ],
     });
     await audit(user, "CREATE", "ChannelMove", ref, null, `Transfer ${amt} from ${a.name} to ${b.name}${fee ? ` (fee ${fee})` : ""}`);
-    refresh();
+    refresh(from);
+    refresh(to);
     return "Transfer recorded.";
   });
 }
@@ -199,11 +206,15 @@ export async function setOpening(_p: Result, fd: FormData) {
     const bal = amount(str(fd, "openingBalance") || "0");
     need(Number.isFinite(bal), "Enter the starting balance.");
     const at = TIME.test(str(fd, "openingAt")) ? fromLocalInput(str(fd, "openingAt")) : null;
-    const feePercent = amount(str(fd, "feePercent") || "0");
-    const feeFixed = amount(str(fd, "feeFixed") || "0");
-    const wdFeePercent = amount(str(fd, "wdFeePercent") || "0");
+    const type = channelType(str(fd, "type"));
+    const pg = isPg(type);
+    const feePercent = pg ? amount(str(fd, "feePercent") || "0") : 0;
+    const feeFixed = pg ? amount(str(fd, "feeFixed") || "0") : 0;
+    const wdFeePercent = pg ? amount(str(fd, "wdFeePercent") || "0") : 0;
+    const settleFeePercent = pg ? amount(str(fd, "settleFeePercent") || "0") : 0;
+    const settleFeeFixed = pg ? amount(str(fd, "settleFeeFixed") || "0") : 0;
     const currency = (str(fd, "currency") || "MYR").toUpperCase();
-    need(feePercent >= 0 && feeFixed >= 0 && wdFeePercent >= 0, "Fees can't be negative.");
+    need(feePercent >= 0 && feeFixed >= 0 && wdFeePercent >= 0 && settleFeePercent >= 0 && settleFeeFixed >= 0, "Fees can't be negative.");
     need(/^[A-Z]{3,5}$/.test(currency), "Currency should be a code like MYR, AUD or USDT.");
     const statementUrl = str(fd, "statementUrl") ? checkStatementUrl(str(fd, "statementUrl")) : null;
     const code = str(fd, "code").slice(0, 20) || null;
@@ -218,10 +229,12 @@ export async function setOpening(_p: Result, fd: FormData) {
         feePercent,
         feeFixed,
         wdFeePercent,
+        settleFeePercent,
+        settleFeeFixed,
         code,
         currency,
-        type: str(fd, "type") === "PG" ? "PG" : "BANK",
-        feeAtSettlement: fd.get("feeAtSettlement") === "on",
+        type,
+        feeAtSettlement: pg && fd.get("feeAtSettlement") === "on",
         statementUrl,
         ...(newLink ? { statementError: null, statementReadAt: null } : {}),
       },

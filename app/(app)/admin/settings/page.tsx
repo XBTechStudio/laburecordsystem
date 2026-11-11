@@ -10,6 +10,8 @@ import { getT } from "@/lib/i18n-server";
 import { getSettings } from "@/lib/settings";
 import { IDLE_DAYS, idleChannels, reviveChannels } from "@/lib/channels";
 import { bankGroupsText } from "@/lib/bank-groups";
+import { isPg, TYPE_LABEL } from "@/lib/channel-type";
+import { ChannelFeeFields } from "@/components/channel-fees";
 import { saveAlerts, saveBankGroups, saveChannel, saveFollowUp, saveGeneral, saveRules, saveTiers, stopIdleChannels, toggleChannel } from "./actions";
 import { TierEditor } from "./tier-editor";
 
@@ -310,6 +312,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                   <th className="r">{t("Fee %")}</th>
                   <th className="r">{t("Fixed fee / txn")}</th>
                   <th className="r">{t("Withdrawal fee %")}</th>
+                  <th className="r">{t("Settlement fee")}</th>
                   <th>{t("Last transaction")}</th>
                   <th>{t("Status")}</th>
                   {!ro && <th />}
@@ -320,17 +323,18 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                   <tr key={c.id} className={c.active ? "" : "opacity-60"}>
                     <td className="text-ink-2">{c.code ?? "–"}</td>
                     <td className="font-medium">{c.name}</td>
-                    <td>{c.type === "PG" ? t("Payment gateway") : t("Bank")}</td>
+                    <td>{t(TYPE_LABEL[c.type] ?? c.type)}</td>
                     <td>{c.currency}</td>
-                    <td className="r">{n(c.feePercent)}%</td>
-                    <td className="r">{n(c.feeFixed).toFixed(2)}</td>
-                    <td className="r">{n(c.wdFeePercent)}%</td>
+                    <td className="r">{isPg(c.type) ? `${n(c.feePercent)}%` : "–"}</td>
+                    <td className="r">{isPg(c.type) ? n(c.feeFixed).toFixed(2) : "–"}</td>
+                    <td className="r">{isPg(c.type) ? `${n(c.wdFeePercent)}%` : "–"}</td>
+                    <td className="r">{isPg(c.type) ? `${n(c.settleFeePercent)}% + ${n(c.settleFeeFixed).toFixed(2)}` : "–"}</td>
                     <td className="text-ink-2">{dt(lastAt.get(c.id))}</td>
                     <td>{c.active ? <Chip tone="good">{t("Active")}</Chip> : <Chip>{t("Inactive")}</Chip>}</td>
                     {!ro && (
                       <td className="r space-x-1">
                         <Dialog label={t("Edit")} title={t("Edit {name}", { name: c.name })}>
-                          <ChannelForm t={t} base={s.baseCurrency} c={{ id: c.id, name: c.name, code: c.code, type: c.type, currency: c.currency, feePercent: n(c.feePercent), feeFixed: n(c.feeFixed), wdFeePercent: n(c.wdFeePercent) }} />
+                          <ChannelForm t={t} base={s.baseCurrency} c={{ id: c.id, name: c.name, code: c.code, type: c.type, currency: c.currency, feePercent: n(c.feePercent), feeFixed: n(c.feeFixed), wdFeePercent: n(c.wdFeePercent), settleFeePercent: n(c.settleFeePercent), settleFeeFixed: n(c.settleFeeFixed) }} />
                         </Dialog>
                         <ActionButton action={toggleChannel} fields={{ id: c.id }}>
                           {c.active ? t("Deactivate") : t("Reactivate")}
@@ -341,7 +345,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 ))}
                 {channels.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="py-8 text-center text-ink-2">
+                    <td colSpan={11} className="py-8 text-center text-ink-2">
                       {t("No channels yet. Add each payment gateway and bank account you use.")}
                     </td>
                   </tr>
@@ -366,28 +370,13 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   );
 }
 
-function ChannelForm({ c, t, base }: { c?: { id: number; name: string; code: string | null; type: string; currency: string; feePercent: number; feeFixed: number; wdFeePercent: number }; t: T; base: string }) {
+function ChannelForm({ c, t, base }: { c?: { id: number; name: string; code: string | null; type: string; currency: string; feePercent: number; feeFixed: number; wdFeePercent: number; settleFeePercent: number; settleFeeFixed: number }; t: T; base: string }) {
   return (
     <ActionForm action={saveChannel} close className="space-y-3">
       {c && <input type="hidden" name="id" value={c.id} />}
       <div className="grid grid-cols-2 gap-3">
         <Field label={t("Channel name")}>
           <input name="name" className="input" defaultValue={c?.name} required placeholder={t("e.g. FPay, Maybank 1234")} />
-        </Field>
-        <Field label={t("Type")}>
-          <select name="type" className="input" defaultValue={c?.type ?? "PG"}>
-            <option value="PG">{t("Payment gateway")}</option>
-            <option value="BANK">{t("Bank account")}</option>
-          </select>
-        </Field>
-        <Field label={t("Fee %")} hint={t("Of each deposit")}>
-          <input name="feePercent" className="input" inputMode="decimal" defaultValue={c?.feePercent ?? 0} />
-        </Field>
-        <Field label={t("Fixed fee per deposit")}>
-          <input name="feeFixed" className="input" inputMode="decimal" defaultValue={c?.feeFixed ?? 0} />
-        </Field>
-        <Field label={t("Withdrawal fee %")} hint={t("Of each withdrawal, taken when it is paid")}>
-          <input name="wdFeePercent" className="input" inputMode="decimal" defaultValue={c?.wdFeePercent ?? 0} />
         </Field>
         <Field label={t("Currency")}>
           <input name="currency" className="input uppercase" defaultValue={c?.currency ?? base} maxLength={5} />
@@ -396,6 +385,7 @@ function ChannelForm({ c, t, base }: { c?: { id: number; name: string; code: str
           <input name="code" className="input" defaultValue={c?.code ?? ""} maxLength={20} placeholder={t("optional")} />
         </Field>
       </div>
+      <ChannelFeeFields type={c?.type ?? "PG"} feePercent={c?.feePercent ?? 0} feeFixed={c?.feeFixed ?? 0} wdFeePercent={c?.wdFeePercent ?? 0} settleFeePercent={c?.settleFeePercent ?? 0} settleFeeFixed={c?.settleFeeFixed ?? 0} />
       <div className="flex justify-end">
         <Submit>{t("Save")}</Submit>
       </div>

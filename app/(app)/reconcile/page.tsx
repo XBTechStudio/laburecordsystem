@@ -11,6 +11,7 @@ import { MOVE_LABEL, moveDetail } from "@/lib/move-kinds";
 import { getT } from "@/lib/i18n-server";
 import { getSettings } from "@/lib/settings";
 import { reviveChannels } from "@/lib/channels";
+import { TYPE_LABEL } from "@/lib/channel-type";
 import { deleteCheck, deleteMove } from "./actions";
 import { BalanceForm, MoveForm, ResolveForm, TransferForm } from "./forms";
 import { ExchangeForm } from "./exchange-form";
@@ -140,7 +141,7 @@ export default async function ReconcilePage() {
                             {a.name}
                           </Link>
                           <div className="text-xs text-muted">
-                            {a.type === "PG" ? t("Payment gateway") : t("Bank")} · {a.currency}
+                            {t(TYPE_LABEL[a.type] ?? a.type)} · {a.currency}
                             {noStart && (
                               <>
                                 {" · "}
